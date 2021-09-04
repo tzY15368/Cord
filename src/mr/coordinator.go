@@ -7,7 +7,10 @@ import (
 	"net/rpc"
 	"os"
 	"sync"
+	"time"
 )
+
+const TimeoutSeconds = 5
 
 const (
 	Pending = iota
@@ -21,6 +24,7 @@ type Task struct {
 	Filename    string
 	IntFilename string
 	State       int
+	startTime   int64
 }
 
 type Coordinator struct {
@@ -98,6 +102,29 @@ func (c *Coordinator) IssueNewTask(args *NewTaskArgs, reply *WorkerTask) error {
 	}
 	return nil
 }
+func (c *Coordinator) checkTimeout() {
+	for {
+		time.Sleep(1 * time.Second)
+		log.Printf("[*] Timeout check")
+		now := time.Now().Unix()
+		c.mu.Lock()
+		for _, task := range c.tasks {
+			if task.startTime != 0 && now-task.startTime < TimeoutSeconds {
+				continue
+			}
+			// this means a worker crash happend
+			// we should rollback the state
+			if task.State == ReduceRunning {
+				log.Printf("found timeout in [%v] %v", task.State, task.Filename)
+				task.State = MapFinished
+			} else if task.State == MapRunning {
+				log.Printf("found timeout in [%v] %v", task.State, task.Filename)
+				task.State = Pending
+			}
+		}
+		c.mu.Unlock()
+	}
+}
 
 //
 // start a thread that listens for RPCs from worker.go
@@ -149,5 +176,6 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	}
 	log.Printf("loaded %d files", len(c.tasks))
 	c.server()
+	go c.checkTimeout()
 	return &c
 }
