@@ -1,29 +1,103 @@
 package mr
 
-import "log"
-import "net"
-import "os"
-import "net/rpc"
-import "net/http"
+import (
+	"log"
+	"net"
+	"net/http"
+	"net/rpc"
+	"os"
+	"sync"
+)
 
+const (
+	Pending = iota
+	MapRunning
+	MapFinished
+	ReduceRunning
+	ReduceFinished
+)
+
+type Task struct {
+	Filename    string
+	IntFilename string
+	State       int
+}
 
 type Coordinator struct {
 	// Your definitions here.
-
+	currentState string
+	tasks        map[string]*Task
+	mu           sync.Mutex
 }
 
 // Your code here -- RPC handlers for the worker to call.
+func (c *Coordinator) CompleteTask(args *WorkerTask, reply *TaskCompleteReply) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	switch args.TaskType {
+	case MAP:
+		taskPtr := c.tasks[args.Filename]
+		if taskPtr != nil {
+			taskPtr.State = MapFinished
+			taskPtr.IntFilename = args.IntFilename
 
-//
-// an example RPC handler.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
-	reply.Y = args.X + 1
+		}
+		log.Printf("mapped %v %v", args.TaskType, args.Filename)
+	case REDUCE:
+		log.Printf("reduced")
+	case END:
+		log.Printf("ended")
+	case WAIT:
+		log.Printf("waited")
+	}
 	return nil
 }
+func (c *Coordinator) IssueNewTask(args *NewTaskArgs, reply *WorkerTask) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	switch c.currentState {
+	case MAP:
+		// 这里有问题
+		reply.TaskType = MAP
+		for _, task := range c.tasks {
+			if task.State == Pending {
+				task.State = MapRunning
+				reply.Filename = task.Filename
+				log.Printf("issue map %v", task.Filename)
+				break
+			} else {
+				continue
+			}
+		}
+		if reply.Filename == "" {
+			reply.TaskType = WAIT
+		}
 
+	case REDUCE:
+		log.Printf("reduce issue")
+		reply.TaskType = END
+	case END:
+		reply.TaskType = END
+	}
+	mapFinishedCount := 0
+	reduceFinishedCount := 0
+	for _, task := range c.tasks {
+		if task.State == MapFinished {
+			mapFinishedCount++
+		} else if task.State == ReduceFinished {
+			reduceFinishedCount++
+		}
+	}
+	if c.currentState == MAP && mapFinishedCount == len(c.tasks) {
+		log.Printf("mapping done\n")
+		c.currentState = REDUCE
+	}
+	if c.currentState == REDUCE && reduceFinishedCount == len(c.tasks) {
+		log.Printf("reduce done")
+		c.currentState = END
+	}
+	return nil
+}
 
 //
 // start a thread that listens for RPCs from worker.go
@@ -46,12 +120,15 @@ func (c *Coordinator) server() {
 // if the entire job has finished.
 //
 func (c *Coordinator) Done() bool {
-	ret := false
-
 	// Your code here.
-
-
-	return ret
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, task := range c.tasks {
+		if task.State != ReduceFinished {
+			return false
+		}
+	}
+	return true
 }
 
 //
@@ -61,10 +138,16 @@ func (c *Coordinator) Done() bool {
 //
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{}
-
+	c.tasks = make(map[string]*Task)
+	c.currentState = MAP
 	// Your code here.
-
-
+	for _, fname := range os.Args[1:] {
+		c.tasks[fname] = &Task{
+			Filename: fname,
+			State:    Pending,
+		}
+	}
+	log.Printf("loaded %d files", len(c.tasks))
 	c.server()
 	return &c
 }
