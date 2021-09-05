@@ -14,10 +14,8 @@ const TimeoutSeconds = 5
 
 const (
 	Pending = iota
-	MapRunning
-	MapFinished
-	ReduceRunning
-	ReduceFinished
+	Running
+	Finished
 )
 
 type Task struct {
@@ -25,11 +23,12 @@ type Task struct {
 	IntFilename string
 	State       int
 	startTime   int64
+	taskType    int
 }
 
 type Coordinator struct {
 	// Your definitions here.
-	currentState string
+	currentState int
 	tasks        map[string]*Task
 	mu           sync.Mutex
 }
@@ -42,13 +41,22 @@ func (c *Coordinator) CompleteTask(args *WorkerTask, reply *TaskCompleteReply) e
 	case MAP:
 		taskPtr := c.tasks[args.Filename]
 		if taskPtr != nil {
-			taskPtr.State = MapFinished
+			taskPtr.State = Finished
 			taskPtr.IntFilename = args.IntFilename
 
 		}
-		log.Printf("mapped %v %v", args.TaskType, args.Filename)
+		c.tasks[args.IntFilename] = &Task{
+			Filename: args.IntFilename,
+			taskType: REDUCE,
+			State:    Pending,
+		}
+		log.Printf("mapped %v", args.Filename)
 	case REDUCE:
-		log.Printf("reduced")
+		taskPtr := c.tasks[args.Filename]
+		if taskPtr != nil {
+			taskPtr.State = Finished
+		}
+		log.Printf("reduced %v", args.Filename)
 	case END:
 		log.Printf("ended")
 	case WAIT:
@@ -56,49 +64,51 @@ func (c *Coordinator) CompleteTask(args *WorkerTask, reply *TaskCompleteReply) e
 	}
 	return nil
 }
+func (c *Coordinator) getCurrentTasks() []*Task {
+	var tasks []*Task
+	for _, task := range c.tasks {
+		if task.taskType == c.currentState {
+			tasks = append(tasks, task)
+		}
+	}
+	return tasks
+}
+func (c *Coordinator) getCurrentFinishedCount() int {
+	i := 0
+	for _, task := range c.getCurrentTasks() {
+		if task.State == Finished {
+			i++
+		}
+	}
+	return i
+}
 func (c *Coordinator) IssueNewTask(args *NewTaskArgs, reply *WorkerTask) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	switch c.currentState {
-	case MAP:
-		// 这里有问题
-		reply.TaskType = MAP
-		for _, task := range c.tasks {
-			if task.State == Pending {
-				task.State = MapRunning
-				reply.Filename = task.Filename
-				log.Printf("issue map %v", task.Filename)
-				break
-			} else {
-				continue
-			}
-		}
-		if reply.Filename == "" {
-			reply.TaskType = WAIT
-		}
 
-	case REDUCE:
-		log.Printf("reduce issue")
-		reply.TaskType = END
-	case END:
-		reply.TaskType = END
+	currentTasks := c.getCurrentTasks()
+	// 首先检查当前状态的任务完成了没
+
+	finishedCount := c.getCurrentFinishedCount()
+	if finishedCount == len(currentTasks) {
+		c.currentState++
+		log.Printf("current stage finished, moving on to %v", c.currentState)
+		currentTasks = c.getCurrentTasks()
 	}
-	mapFinishedCount := 0
-	reduceFinishedCount := 0
-	for _, task := range c.tasks {
-		if task.State == MapFinished {
-			mapFinishedCount++
-		} else if task.State == ReduceFinished {
-			reduceFinishedCount++
+
+	reply.TaskType = c.currentState
+	for _, task := range currentTasks {
+		if task.State == Pending {
+			task.State = Running
+			task.startTime = time.Now().Unix()
+			reply.Filename = task.Filename
+			log.Printf("issue %v %v", task.taskType, task.Filename)
+			break
 		}
 	}
-	if c.currentState == MAP && mapFinishedCount == len(c.tasks) {
-		log.Printf("mapping done\n")
-		c.currentState = REDUCE
-	}
-	if c.currentState == REDUCE && reduceFinishedCount == len(c.tasks) {
-		log.Printf("reduce done")
-		c.currentState = END
+	if reply.Filename == "" {
+		log.Printf("waiting for other process to finsh")
+		reply.TaskType = WAIT
 	}
 	return nil
 }
@@ -108,17 +118,15 @@ func (c *Coordinator) checkTimeout() {
 		log.Printf("[*] Timeout check")
 		now := time.Now().Unix()
 		c.mu.Lock()
-		for _, task := range c.tasks {
-			if task.startTime != 0 && now-task.startTime < TimeoutSeconds {
+		ct := c.getCurrentTasks()
+		for _, task := range ct {
+			if task.State != Finished && task.startTime != 0 && now-task.startTime < TimeoutSeconds {
 				continue
 			}
 			// this means a worker crash happend
 			// we should rollback the state
-			if task.State == ReduceRunning {
-				log.Printf("found timeout in [%v] %v", task.State, task.Filename)
-				task.State = MapFinished
-			} else if task.State == MapRunning {
-				log.Printf("found timeout in [%v] %v", task.State, task.Filename)
+			if task.State == Running {
+				log.Printf("found timeout in [%v] %v", task.taskType, task.Filename)
 				task.State = Pending
 			}
 		}
@@ -150,12 +158,7 @@ func (c *Coordinator) Done() bool {
 	// Your code here.
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, task := range c.tasks {
-		if task.State != ReduceFinished {
-			return false
-		}
-	}
-	return true
+	return c.currentState == END
 }
 
 //
@@ -172,6 +175,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 		c.tasks[fname] = &Task{
 			Filename: fname,
 			State:    Pending,
+			taskType: MAP,
 		}
 	}
 	log.Printf("loaded %d files", len(c.tasks))

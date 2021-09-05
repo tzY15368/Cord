@@ -12,10 +12,13 @@ import (
 )
 
 const (
-	MAP    = "map"
-	REDUCE = "reduce"
-	WAIT   = "wait"
-	END    = "end"
+	MAP = iota
+	REDUCE
+	END
+)
+
+const (
+	WAIT = -1
 )
 
 //
@@ -31,7 +34,7 @@ type ExampleReply struct {
 	Y int
 }
 type WorkerTask struct {
-	TaskType    string
+	TaskType    int
 	Filename    string
 	IntFilename string
 }
@@ -47,11 +50,6 @@ type TaskCompleteArgs struct {
 }
 
 type TaskCompleteReply struct{}
-type DidOneMapTaskArgs struct {
-	Filename    string
-	IntFilename string
-}
-type DidOneMapTaskReply struct{}
 
 // Add your RPC definitions here.
 

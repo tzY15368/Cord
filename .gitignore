@@ -3,3 +3,5 @@ api.key
 .api.key.trimmed
 *-handin.tar.gz
 src/main/map-out-*
+src/main/mr-out-*
+answer.txt
