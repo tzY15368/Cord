@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 //
@@ -23,6 +25,7 @@ type ByKey []KeyValue
 
 var nReduce int
 var intermediateFiles []*os.File
+var workerID string
 
 const baseIntFilename = "map-out-"
 
@@ -75,7 +78,10 @@ func doReduce(reducef func(string, []string) string, taskPtr *WorkerTask) error 
 	lines := strings.Split(string(content), "\n")
 	for _, line := range lines {
 		kv := strings.Split(line, " ")
-		intermediate = append(intermediate, KeyValue{Key: kv[0], Value: kv[1]})
+		if len(kv) == 2 {
+
+			intermediate = append(intermediate, KeyValue{Key: kv[0], Value: kv[1]})
+		}
 	}
 
 	//json.Unmarshal(content, &intermediate)
@@ -113,10 +119,6 @@ func doMap(mapf func(string, string) []KeyValue, taskPtr *WorkerTask) error {
 	if err != nil {
 		return err
 	}
-
-	//intFilename := fmt.Sprintf("map-out-%d", ihash(string(content))%5)
-	//taskPtr.IntFilename = intFilename
-
 	kva := mapf(fname, string(content))
 	sort.Sort(ByKey(kva))
 	for _, kv := range kva {
@@ -125,58 +127,12 @@ func doMap(mapf func(string, string) []KeyValue, taskPtr *WorkerTask) error {
 			return err
 		}
 	}
-	//var intFP *os.File
-	// var outBytes []byte
-	// log.Printf("int file: %v", intFilename)
-	// existence, _ := pathExists(intFilename)
-	// if existence {
-	// 	log.Printf("out %v exists, appending", intFilename)
-	// 	intFP, err := os.OpenFile(intFilename, os.O_RDWR, 0755)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	outBytes, err = ioutil.ReadAll(intFP)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	var tmpKVA []KeyValue
-	// 	err = json.Unmarshal(outBytes, &tmpKVA)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	kva = append(kva, tmpKVA...)
-	// 	log.Printf("old kva len: %d, new kva len: %d, file is %s, tmpfileis %s", len(tmpKVA), len(kva), fname, intFilename)
-	// 	resultBytes, err := json.Marshal(kva)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	intFP.Seek(0, io.SeekStart)
-	// 	n, err := intFP.Write(resultBytes)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	log.Printf("n=%d", n)
-	// 	intFP.Close()
-	// } else {
-	// 	log.Printf("out %v doesnt exist", intFilename)
-	// 	intFP, err := os.Create(intFilename)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	resultBytes, err := json.Marshal(kva)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	intFP.Write(resultBytes)
-	// 	intFP.Close()
-	// }
 	return nil
 }
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
 	// Your worker implementation here.
-
 	err := GetNReduce()
 	if err != nil {
 		panic(err)
@@ -190,13 +146,16 @@ func Worker(mapf func(string, string) []KeyValue,
 	}
 	for {
 		taskPtr := GetNewTask()
+		time.Sleep(3 * time.Second)
+		fmt.Printf("sleeping before task ")
 		var e error
 		if taskPtr.TaskType == MAP {
 			e = doMap(mapf, taskPtr)
 		} else if taskPtr.TaskType == REDUCE {
 			e = doReduce(reducef, taskPtr)
 		} else if taskPtr.TaskType == END {
-			log.Fatalf("no more tasks, exit")
+			log.Printf("no more tasks, exit")
+			os.Exit(0)
 		} else if taskPtr.TaskType == WAIT {
 			log.Printf("need to wait 3s")
 			time.Sleep(1 * time.Second)
@@ -256,4 +215,15 @@ func call(rpcname string, args interface{}, reply interface{}) error {
 
 	err = c.Call(rpcname, args, reply)
 	return err
+}
+func init() {
+	fname := "log.txt"
+	logFile, err := os.OpenFile(fname, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0766)
+	if err != nil {
+		panic(err)
+	}
+	log.SetOutput(logFile) // 将文件设置为log输出的文件
+	log.SetPrefix("[+]")
+	log.SetFlags(log.LstdFlags | log.Lshortfile | log.LUTC)
+	workerID = uuid.New()
 }

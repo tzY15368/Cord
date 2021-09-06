@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -34,6 +35,7 @@ type Coordinator struct {
 	mu           sync.Mutex
 }
 
+// 需要缓冲区，只有成功完成的任务才能提交到实际输出文件
 // Your code here -- RPC handlers for the worker to call.
 func (c *Coordinator) CompleteTask(args *WorkerTask, reply *TaskCompleteReply) error {
 	c.mu.Lock()
@@ -45,11 +47,6 @@ func (c *Coordinator) CompleteTask(args *WorkerTask, reply *TaskCompleteReply) e
 			taskPtr.State = Finished
 			taskPtr.IntFilename = args.IntFilename
 
-		}
-		c.tasks[args.IntFilename] = &Task{
-			Filename: args.IntFilename,
-			taskType: REDUCE,
-			State:    Pending,
 		}
 		log.Printf("mapped %v", args.Filename)
 	case REDUCE:
@@ -96,12 +93,18 @@ func (c *Coordinator) IssueNewTask(args *NewTaskArgs, reply *WorkerTask) error {
 
 	finishedCount := c.getCurrentFinishedCount()
 	if finishedCount == len(currentTasks) {
-		c.currentState++
+		if c.currentState != END {
+			c.currentState++
+		}
 		log.Printf("current stage finished, moving on to %v", c.currentState)
 		currentTasks = c.getCurrentTasks()
 	}
 
 	reply.TaskType = c.currentState
+	if reply.TaskType == END {
+		return nil
+	}
+
 	for _, task := range currentTasks {
 		if task.State == Pending {
 			task.State = Running
@@ -113,6 +116,7 @@ func (c *Coordinator) IssueNewTask(args *NewTaskArgs, reply *WorkerTask) error {
 	}
 	if reply.Filename == "" {
 		log.Printf("waiting for other process to finsh")
+
 		reply.TaskType = WAIT
 	}
 	return nil
@@ -122,6 +126,9 @@ func (c *Coordinator) checkTimeout() {
 		time.Sleep(1 * time.Second)
 		log.Printf("[*] Timeout check")
 		now := time.Now().Unix()
+		if c.currentState == END {
+			break
+		}
 		c.mu.Lock()
 		ct := c.getCurrentTasks()
 		for _, task := range ct {
@@ -184,8 +191,27 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 			taskType: MAP,
 		}
 	}
+	for i := 0; i < c.nReduce; i++ {
+
+		c.tasks[fmt.Sprintf(baseIntFilename+"%d", i)] = &Task{
+			Filename: fmt.Sprintf(baseIntFilename+"%d", i),
+			taskType: REDUCE,
+			State:    Pending,
+		}
+	}
 	log.Printf("loaded %d files", len(c.tasks))
 	c.server()
 	go c.checkTimeout()
+
 	return &c
+}
+func init() {
+	fname := "log.txt"
+	logFile, err := os.OpenFile(fname, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0766)
+	if err != nil {
+		panic(err)
+	}
+	log.SetOutput(logFile) // 将文件设置为log输出的文件
+	log.SetPrefix("[-]")
+	log.SetFlags(log.LstdFlags | log.Lshortfile | log.LUTC)
 }
