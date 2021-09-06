@@ -30,13 +30,9 @@ type WorkerTask struct {
 	TaskType    int
 	Filename    string
 	IntFilename string
+	WorkerID    string
 }
 type NewTaskArgs struct{}
-
-type TaskCompleteArgs struct {
-	TaskType string
-	Filename string
-}
 
 type TaskCompleteReply struct{}
 

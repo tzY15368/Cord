@@ -25,6 +25,7 @@ type Task struct {
 	State       int
 	startTime   int64
 	taskType    int
+	workerID    string
 }
 
 type Coordinator struct {
@@ -46,7 +47,11 @@ func (c *Coordinator) CompleteTask(args *WorkerTask, reply *TaskCompleteReply) e
 		if taskPtr != nil {
 			taskPtr.State = Finished
 			taskPtr.IntFilename = args.IntFilename
+			if args.TaskType == MAP {
+				var suffix int
+				fmt.Sscanf(taskPtr.IntFilename, args.WorkerID+"-map-out-%d", &suffix)
 
+			}
 		}
 		log.Printf("mapped %v", args.Filename)
 	case REDUCE:
@@ -179,6 +184,7 @@ func (c *Coordinator) Done() bool {
 // nReduce is the number of reduce tasks to use.
 //
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
+	fmt.Print("-----------")
 	c := Coordinator{}
 	c.tasks = make(map[string]*Task)
 	c.currentState = MAP
@@ -214,4 +220,5 @@ func init() {
 	log.SetOutput(logFile) // 将文件设置为log输出的文件
 	log.SetPrefix("[-]")
 	log.SetFlags(log.LstdFlags | log.Lshortfile | log.LUTC)
+	fmt.Println("did init")
 }

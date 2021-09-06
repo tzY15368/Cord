@@ -133,17 +133,7 @@ func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
 	// Your worker implementation here.
-	err := GetNReduce()
-	if err != nil {
-		panic(err)
-	}
-	for i := 0; i < nReduce; i++ {
-		fp, err := os.OpenFile(fmt.Sprintf(baseIntFilename+"%d", i), os.O_APPEND|os.O_CREATE|os.O_RDWR, 0777)
-		if err != nil {
-			panic(err)
-		}
-		intermediateFiles = append(intermediateFiles, fp)
-	}
+
 	for {
 		taskPtr := GetNewTask()
 		time.Sleep(3 * time.Second)
@@ -167,11 +157,6 @@ func Worker(mapf func(string, string) []KeyValue,
 	}
 }
 
-//
-// example function to show how to make an RPC call to the coordinator.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
 func GetNewTask() *WorkerTask {
 	args := NewTaskArgs{}
 	reply := WorkerTask{}
@@ -191,6 +176,7 @@ func GetNReduce() error {
 	return nil
 }
 func TaskComplete(argsPtr *WorkerTask) error {
+	argsPtr.WorkerID = workerID
 	reply := TaskCompleteReply{}
 	err := call("Coordinator.CompleteTask", argsPtr, &reply)
 	if err != nil {
@@ -216,6 +202,7 @@ func call(rpcname string, args interface{}, reply interface{}) error {
 	err = c.Call(rpcname, args, reply)
 	return err
 }
+
 func init() {
 	fname := "log.txt"
 	logFile, err := os.OpenFile(fname, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0766)
@@ -225,5 +212,17 @@ func init() {
 	log.SetOutput(logFile) // 将文件设置为log输出的文件
 	log.SetPrefix("[+]")
 	log.SetFlags(log.LstdFlags | log.Lshortfile | log.LUTC)
-	workerID = uuid.New()
+	workerID = md5V(uuid.New().String())[0:3]
+
+	err = GetNReduce()
+	if err != nil {
+		panic(err)
+	}
+	for i := 0; i < nReduce; i++ {
+		fp, err := os.OpenFile(fmt.Sprintf("%v-"+baseIntFilename+"%d", workerID, i), os.O_APPEND|os.O_CREATE|os.O_RDWR, 0777)
+		if err != nil {
+			panic(err)
+		}
+		intermediateFiles = append(intermediateFiles, fp)
+	}
 }
