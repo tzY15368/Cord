@@ -29,8 +29,6 @@ var nReduce int
 var intermediateFiles []*os.File
 var workerID string
 
-const baseIntFilename = "map-out-"
-
 // for sorting by key.
 func (a ByKey) Len() int           { return len(a) }
 func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
@@ -134,12 +132,22 @@ func doMap(mapf func(string, string) []KeyValue, taskPtr *WorkerTask) error {
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
+	workerID = md5V(uuid.New().String())[0:3]
+	fmt.Println("worker id: ", workerID)
 	// Your worker implementation here.
-
+	err := GetNReduce()
+	if err != nil {
+		panic(err)
+	}
+	for i := 0; i < nReduce; i++ {
+		fp, err := os.OpenFile(fmt.Sprintf(baseIntFilename+"%v_%v", i, workerID), os.O_APPEND|os.O_CREATE|os.O_RDWR, 0777)
+		if err != nil {
+			panic(err)
+		}
+		intermediateFiles = append(intermediateFiles, fp)
+	}
 	for {
 		taskPtr := GetNewTask()
-		time.Sleep(3 * time.Second)
-		fmt.Printf("sleeping before task ")
 		var e error
 		if taskPtr.TaskType == MAP {
 			e = doMap(mapf, taskPtr)
@@ -160,7 +168,9 @@ func Worker(mapf func(string, string) []KeyValue,
 }
 
 func GetNewTask() *WorkerTask {
-	args := NewTaskArgs{}
+	args := NewTaskArgs{
+		WorkerID: workerID,
+	}
 	reply := WorkerTask{}
 	err := call("Coordinator.IssueNewTask", &args, &reply)
 	handleErr(err)
@@ -222,17 +232,4 @@ func init() {
 	log.SetOutput(logFile) // 将文件设置为log输出的文件
 	log.SetPrefix("[+]")
 	log.SetFlags(log.LstdFlags | log.Lshortfile | log.LUTC)
-	workerID = md5V(uuid.New().String())[0:3]
-
-	err = GetNReduce()
-	if err != nil {
-		panic(err)
-	}
-	for i := 0; i < nReduce; i++ {
-		fp, err := os.OpenFile(fmt.Sprintf("%v-"+baseIntFilename+"%d", workerID, i), os.O_APPEND|os.O_CREATE|os.O_RDWR, 0777)
-		if err != nil {
-			panic(err)
-		}
-		intermediateFiles = append(intermediateFiles, fp)
-	}
 }

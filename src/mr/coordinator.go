@@ -2,6 +2,7 @@ package mr
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -34,10 +35,34 @@ type Coordinator struct {
 	nReduce      int
 	tasks        map[string]*Task
 	mu           sync.Mutex
+	intFiles     []*os.File
 }
 
 // 需要缓冲区，只有成功完成的任务才能提交到实际输出文件
 // Your code here -- RPC handlers for the worker to call.
+
+func (c *Coordinator) appendToFile(workerID string) error {
+	for i, intFile := range c.intFiles {
+		sname := fmt.Sprintf(baseIntFilename+"%d_%v", i, workerID)
+		srcFile, err := os.Open(sname)
+		if err != nil {
+			panic(err)
+		}
+		written, err := io.Copy(intFile, srcFile)
+		if err != nil {
+			panic(err)
+			return err
+		}
+		log.Printf("moved %d from buffer", written)
+		err = os.Truncate(sname, 0)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return nil
+}
+
 func (c *Coordinator) CompleteTask(args *WorkerTask, reply *TaskCompleteReply) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -46,11 +71,9 @@ func (c *Coordinator) CompleteTask(args *WorkerTask, reply *TaskCompleteReply) e
 		taskPtr := c.tasks[args.Filename]
 		if taskPtr != nil {
 			taskPtr.State = Finished
-			taskPtr.IntFilename = args.IntFilename
-			if args.TaskType == MAP {
-				var suffix int
-				fmt.Sscanf(taskPtr.IntFilename, args.WorkerID+"-map-out-%d", &suffix)
-
+			err := c.appendToFile(args.WorkerID)
+			if err != nil {
+				panic(err)
 			}
 		}
 		log.Printf("mapped %v", args.Filename)
@@ -113,6 +136,7 @@ func (c *Coordinator) IssueNewTask(args *NewTaskArgs, reply *WorkerTask) error {
 	for _, task := range currentTasks {
 		if task.State == Pending {
 			task.State = Running
+			task.workerID = args.WorkerID
 			task.startTime = time.Now().Unix()
 			reply.Filename = task.Filename
 			log.Printf("issue %v %v", task.taskType, task.Filename)
@@ -184,7 +208,6 @@ func (c *Coordinator) Done() bool {
 // nReduce is the number of reduce tasks to use.
 //
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
-	fmt.Print("-----------")
 	c := Coordinator{}
 	c.tasks = make(map[string]*Task)
 	c.currentState = MAP
@@ -204,6 +227,11 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 			taskType: REDUCE,
 			State:    Pending,
 		}
+		fp, err := os.OpenFile(fmt.Sprintf(baseIntFilename+"%v", i), os.O_APPEND|os.O_CREATE|os.O_RDWR, 0777)
+		if err != nil {
+			panic(err)
+		}
+		c.intFiles = append(c.intFiles, fp)
 	}
 	log.Printf("loaded %d files", len(c.tasks))
 	c.server()
@@ -220,5 +248,4 @@ func init() {
 	log.SetOutput(logFile) // 将文件设置为log输出的文件
 	log.SetPrefix("[-]")
 	log.SetFlags(log.LstdFlags | log.Lshortfile | log.LUTC)
-	fmt.Println("did init")
 }

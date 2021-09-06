@@ -26,13 +26,17 @@ const (
 // and reply for an RPC.
 //
 
+const baseIntFilename = "map-out-"
+
 type WorkerTask struct {
 	TaskType    int
 	Filename    string
 	IntFilename string
 	WorkerID    string
 }
-type NewTaskArgs struct{}
+type NewTaskArgs struct {
+	WorkerID string
+}
 
 type TaskCompleteReply struct{}
 
