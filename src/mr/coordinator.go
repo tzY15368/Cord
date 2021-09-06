@@ -29,6 +29,7 @@ type Task struct {
 type Coordinator struct {
 	// Your definitions here.
 	currentState int
+	nReduce      int
 	tasks        map[string]*Task
 	mu           sync.Mutex
 }
@@ -81,6 +82,10 @@ func (c *Coordinator) getCurrentFinishedCount() int {
 		}
 	}
 	return i
+}
+func (c *Coordinator) GetNReduce(args *NReduceArgs, reply *NReduceReply) error {
+	reply.NReduce = c.nReduce
+	return nil
 }
 func (c *Coordinator) IssueNewTask(args *NewTaskArgs, reply *WorkerTask) error {
 	c.mu.Lock()
@@ -170,6 +175,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{}
 	c.tasks = make(map[string]*Task)
 	c.currentState = MAP
+	c.nReduce = nReduce
 	// Your code here.
 	for _, fname := range os.Args[1:] {
 		c.tasks[fname] = &Task{

@@ -1,15 +1,14 @@
 package mr
 
 import (
-	"encoding/json"
 	"fmt"
 	"hash/fnv"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/rpc"
 	"os"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -21,6 +20,11 @@ type KeyValue struct {
 	Value string
 }
 type ByKey []KeyValue
+
+var nReduce int
+var intermediateFiles []*os.File
+
+const baseIntFilename = "map-out-"
 
 // for sorting by key.
 func (a ByKey) Len() int           { return len(a) }
@@ -40,16 +44,6 @@ func handleErr(e error) {
 	if e != nil {
 		log.Fatalf("worker:%v", e)
 	}
-}
-func pathExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
 }
 
 //
@@ -78,7 +72,13 @@ func doReduce(reducef func(string, []string) string, taskPtr *WorkerTask) error 
 
 	var intermediate []KeyValue
 
-	json.Unmarshal(content, &intermediate)
+	lines := strings.Split(string(content), "\n")
+	for _, line := range lines {
+		kv := strings.Split(line, " ")
+		intermediate = append(intermediate, KeyValue{Key: kv[0], Value: kv[1]})
+	}
+
+	//json.Unmarshal(content, &intermediate)
 	sort.Sort(ByKey(intermediate))
 	i := 0
 	for i < len(intermediate) {
@@ -114,55 +114,62 @@ func doMap(mapf func(string, string) []KeyValue, taskPtr *WorkerTask) error {
 		return err
 	}
 
-	intFilename := fmt.Sprintf("map-out-%d", ihash(string(content))%5)
-	taskPtr.IntFilename = intFilename
+	//intFilename := fmt.Sprintf("map-out-%d", ihash(string(content))%5)
+	//taskPtr.IntFilename = intFilename
 
 	kva := mapf(fname, string(content))
-	//var intFP *os.File
-	var outBytes []byte
-	log.Printf("int file: %v", intFilename)
-	existence, _ := pathExists(intFilename)
-	if existence {
-		log.Printf("out %v exists, appending", intFilename)
-		intFP, err := os.OpenFile(intFilename, os.O_RDWR, 0755)
+	sort.Sort(ByKey(kva))
+	for _, kv := range kva {
+		_, err := fmt.Fprintf(intermediateFiles[ihash(kv.Key)%nReduce], "%v %v\n", kv.Key, kv.Value)
 		if err != nil {
 			return err
 		}
-		outBytes, err = ioutil.ReadAll(intFP)
-		if err != nil {
-			return err
-		}
-		var tmpKVA []KeyValue
-		err = json.Unmarshal(outBytes, &tmpKVA)
-		if err != nil {
-			return err
-		}
-		kva = append(kva, tmpKVA...)
-		log.Printf("old kva len: %d, new kva len: %d, file is %s, tmpfileis %s", len(tmpKVA), len(kva), fname, intFilename)
-		resultBytes, err := json.Marshal(kva)
-		if err != nil {
-			return err
-		}
-		intFP.Seek(0, io.SeekStart)
-		n, err := intFP.Write(resultBytes)
-		if err != nil {
-			return err
-		}
-		log.Printf("n=%d", n)
-		intFP.Close()
-	} else {
-		log.Printf("out %v doesnt exist", intFilename)
-		intFP, err := os.Create(intFilename)
-		if err != nil {
-			return err
-		}
-		resultBytes, err := json.Marshal(kva)
-		if err != nil {
-			return err
-		}
-		intFP.Write(resultBytes)
-		intFP.Close()
 	}
+	//var intFP *os.File
+	// var outBytes []byte
+	// log.Printf("int file: %v", intFilename)
+	// existence, _ := pathExists(intFilename)
+	// if existence {
+	// 	log.Printf("out %v exists, appending", intFilename)
+	// 	intFP, err := os.OpenFile(intFilename, os.O_RDWR, 0755)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	outBytes, err = ioutil.ReadAll(intFP)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	var tmpKVA []KeyValue
+	// 	err = json.Unmarshal(outBytes, &tmpKVA)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	kva = append(kva, tmpKVA...)
+	// 	log.Printf("old kva len: %d, new kva len: %d, file is %s, tmpfileis %s", len(tmpKVA), len(kva), fname, intFilename)
+	// 	resultBytes, err := json.Marshal(kva)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	intFP.Seek(0, io.SeekStart)
+	// 	n, err := intFP.Write(resultBytes)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	log.Printf("n=%d", n)
+	// 	intFP.Close()
+	// } else {
+	// 	log.Printf("out %v doesnt exist", intFilename)
+	// 	intFP, err := os.Create(intFilename)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	resultBytes, err := json.Marshal(kva)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	intFP.Write(resultBytes)
+	// 	intFP.Close()
+	// }
 	return nil
 }
 func Worker(mapf func(string, string) []KeyValue,
@@ -170,7 +177,17 @@ func Worker(mapf func(string, string) []KeyValue,
 
 	// Your worker implementation here.
 
-	// uncomment to send the Example RPC to the coordinator.
+	err := GetNReduce()
+	if err != nil {
+		panic(err)
+	}
+	for i := 0; i < nReduce; i++ {
+		fp, err := os.OpenFile(fmt.Sprintf(baseIntFilename+"%d", i), os.O_APPEND|os.O_CREATE|os.O_RDWR, 0777)
+		if err != nil {
+			panic(err)
+		}
+		intermediateFiles = append(intermediateFiles, fp)
+	}
 	for {
 		taskPtr := GetNewTask()
 		var e error
@@ -204,7 +221,16 @@ func GetNewTask() *WorkerTask {
 	log.Printf("got new [%v] task, fname=%v", reply.TaskType, reply.Filename)
 	return &reply
 }
+func GetNReduce() error {
+	reply := &NReduceReply{}
 
+	err := call("Coordinator.GetNReduce", &NReduceArgs{}, reply)
+	if err != nil {
+		return err
+	}
+	nReduce = reply.NReduce
+	return nil
+}
 func TaskComplete(argsPtr *WorkerTask) error {
 	reply := TaskCompleteReply{}
 	err := call("Coordinator.CompleteTask", argsPtr, &reply)

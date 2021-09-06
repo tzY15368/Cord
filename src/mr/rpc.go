@@ -26,23 +26,12 @@ const (
 // and reply for an RPC.
 //
 
-type ExampleArgs struct {
-	X int
-}
-
-type ExampleReply struct {
-	Y int
-}
 type WorkerTask struct {
 	TaskType    int
 	Filename    string
 	IntFilename string
 }
 type NewTaskArgs struct{}
-type NewTaskReply struct {
-	TaskType string
-	Filename string
-}
 
 type TaskCompleteArgs struct {
 	TaskType string
@@ -50,6 +39,11 @@ type TaskCompleteArgs struct {
 }
 
 type TaskCompleteReply struct{}
+
+type NReduceReply struct {
+	NReduce int
+}
+type NReduceArgs struct{}
 
 // Add your RPC definitions here.
 
