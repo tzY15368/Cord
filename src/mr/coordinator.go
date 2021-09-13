@@ -51,7 +51,6 @@ func (c *Coordinator) appendToFile(workerID string) error {
 		written, err := io.Copy(intFile, srcFile)
 		if err != nil {
 			panic(err)
-			return err
 		}
 		log.Printf("moved %d from buffer", written)
 		err = os.Truncate(sname, 0)
