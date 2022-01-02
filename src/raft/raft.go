@@ -398,7 +398,7 @@ func (rf *Raft) initElection(ctx context.Context) {
 			rf.mu.Unlock()
 			return
 		case <-time.After(conf.ElectionTimeout):
-			log.Infof("[%d] no leader elected ^^^, will restart on next tick", rf.me)
+			log.Infof("[%d] no leader elected >>>>>>>>>>>>>>>>>, will restart after next timeout", rf.me)
 			rf.mu.Lock()
 			rf.lastRPCReceived = time.Now().UnixNano()
 			rf.currentState = FOLLOWER
