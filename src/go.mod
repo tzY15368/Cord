@@ -12,7 +12,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/peterh/liner v1.2.1 // indirect
 	github.com/shiena/ansicolor v0.0.0-20200904210342-c7312218db18
-	github.com/sirupsen/logrus v1.8.1 // indirect
+	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.2.1 // indirect
 	go.starlark.net v0.0.0-20210901212718-87f333178d59 // indirect
 	golang.org/x/arch v0.0.0-20210901143047-ebb09ed340f1 // indirect

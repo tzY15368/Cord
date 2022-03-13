@@ -1,11 +1,13 @@
 package raft
 
 import (
+	"bytes"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"6.824/labgob"
 	"6.824/labrpc"
 	"github.com/sirupsen/logrus"
 )
@@ -94,36 +96,36 @@ func (rf *Raft) getLastLogIndex() int {
 // see paper's Figure 2 for a description of what should be persistent.
 //
 func (rf *Raft) persist() {
-	// Your code here (2C).
-	// Example:
-	// w := new(bytes.Buffer)
-	// e := labgob.NewEncoder(w)
-	// e.Encode(rf.xxx)
-	// e.Encode(rf.yyy)
-	// data := w.Bytes()
-	// rf.persister.SaveRaftState(data)
+	w := new(bytes.Buffer)
+	e2 := labgob.NewEncoder(w)
+	rf.mu.Lock()
+	e2.Encode(rf.currentTerm)
+	e2.Encode(rf.votedFor)
+	e2.Encode(rf.log)
+	rf.mu.Unlock()
+	rf.persister.SaveRaftState(w.Bytes())
+	rf.logger.Info("save persist ok")
 }
 
 //
 // restore previously persisted state.
 //
 func (rf *Raft) readPersist(data []byte) {
-	if data == nil || len(data) < 1 { // bootstrap without any state?
-		return
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+
+	var term, votedFor int
+	var logs []LogEntry
+
+	if d.Decode(&term) != nil || d.Decode(&votedFor) != nil || d.Decode(&logs) != nil {
+		panic("read persist failed")
 	}
-	// Your code here (2C).
-	// Example:
-	// r := bytes.NewBuffer(data)
-	// d := labgob.NewDecoder(r)
-	// var xxx
-	// var yyy
-	// if d.Decode(&xxx) != nil ||
-	//    d.Decode(&yyy) != nil {
-	//   error...
-	// } else {
-	//   rf.xxx = xxx
-	//   rf.yyy = yyy
-	// }
+	rf.mu.Lock()
+	rf.currentTerm = term
+	rf.votedFor = votedFor
+	rf.log = logs
+	rf.mu.Unlock()
+	rf.logger.Info("persist: read persist ok")
 }
 
 func (rf *Raft) isUpToDate(candidateTerm int, candidateIndex int) bool {
