@@ -30,10 +30,12 @@ func (rf *Raft) broadcastRequestVote() {
 	args.CandidateId = rf.me
 	args.LastLogIndex = rf.getLastLogIndex()
 	args.LastLogTerm = rf.getLastLogTerm()
+	me := rf.me
+	state := rf.state
 	rf.mu.Unlock()
 
 	for server := range rf.peers {
-		if server != rf.me && rf.state == STATE_CANDIDATE {
+		if server != me && state == STATE_CANDIDATE {
 			go rf.sendRequestVote(server, args, &RequestVoteReply{})
 		}
 	}

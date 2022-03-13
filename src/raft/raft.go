@@ -96,15 +96,14 @@ func (rf *Raft) getLastLogIndex() int {
 // see paper's Figure 2 for a description of what should be persistent.
 //
 func (rf *Raft) persist() {
+	// unsafe, use inside locks
 	w := new(bytes.Buffer)
 	e2 := labgob.NewEncoder(w)
-	rf.mu.Lock()
 	e2.Encode(rf.currentTerm)
 	e2.Encode(rf.votedFor)
 	e2.Encode(rf.log)
-	rf.mu.Unlock()
 	rf.persister.SaveRaftState(w.Bytes())
-	rf.logger.Info("save persist ok")
+	rf.logger.Debug("save persist ok")
 }
 
 //
@@ -118,14 +117,15 @@ func (rf *Raft) readPersist(data []byte) {
 	var logs []LogEntry
 
 	if d.Decode(&term) != nil || d.Decode(&votedFor) != nil || d.Decode(&logs) != nil {
-		panic("read persist failed")
+		rf.logger.Warn("persist: read persist failed")
+	} else {
+		rf.mu.Lock()
+		rf.currentTerm = term
+		rf.votedFor = votedFor
+		rf.log = logs
+		rf.mu.Unlock()
+		rf.logger.Info("persist: read persist ok")
 	}
-	rf.mu.Lock()
-	rf.currentTerm = term
-	rf.votedFor = votedFor
-	rf.log = logs
-	rf.mu.Unlock()
-	rf.logger.Info("persist: read persist ok")
 }
 
 func (rf *Raft) isUpToDate(candidateTerm int, candidateIndex int) bool {
@@ -137,10 +137,12 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
+	defer rf.persist()
 
 	if ok {
 		if rf.state != STATE_CANDIDATE || rf.currentTerm != args.Term {
 			// invalid request
+			rf.logger.Warn("rpc: invalid request")
 			return ok
 		}
 
@@ -169,6 +171,7 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
+	defer rf.persist()
 
 	if !ok || rf.state != STATE_LEADER || args.Term != rf.currentTerm {
 		return ok
@@ -177,7 +180,7 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 		rf.currentTerm = reply.Term
 		rf.state = STATE_FOLLOWER
 		rf.votedFor = -1
-		rf.persist()
+		//rf.persist()
 		return ok
 	}
 	if reply.Success {
@@ -263,16 +266,19 @@ func (rf *Raft) Run() {
 			rf.currentTerm++
 			rf.votedFor = rf.me
 			rf.voteCount = 1
+			rf.persist()
 			rf.mu.Unlock()
 			go rf.broadcastRequestVote()
 
 			select {
 			case <-rf.chanHeartbeat:
+				rf.mu.Lock()
 				rf.state = STATE_FOLLOWER
+				rf.mu.Unlock()
 			case <-rf.chanWinElect:
 				rf.mu.Lock()
-				rf.nextIndex = make([]int, len(rf.peers))
-				rf.matchIndex = make([]int, len(rf.peers))
+				// rf.nextIndex = make([]int, len(rf.peers))
+				// rf.matchIndex = make([]int, len(rf.peers))
 				nextIndex := rf.getLastLogIndex() + 1
 				for i := range rf.nextIndex {
 					rf.nextIndex[i] = nextIndex
@@ -307,6 +313,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.chanWinElect = make(chan bool, 100)
 	rf.chanHeartbeat = make(chan bool, 100)
 
+	rf.nextIndex = make([]int, len(rf.peers))
+	rf.matchIndex = make([]int, len(rf.peers))
 	rf.logger = logrus.WithField("id", rf.me)
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
