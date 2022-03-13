@@ -55,11 +55,13 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	reply.Term = rf.currentTerm
 
+	// optimization
 	if args.PrevLogIndex > rf.getLastLogIndex() {
 		reply.NextTryIndex = rf.getLastLogIndex() + 1
 		return
 	}
 
+	// 待优化
 	if args.PrevLogIndex > 0 && args.PrevLogTerm != rf.log[args.PrevLogIndex].Term {
 		term := rf.log[args.PrevLogIndex].Term
 		for reply.NextTryIndex = args.PrevLogIndex - 1; reply.NextTryIndex >= 0 && rf.log[reply.NextTryIndex].Term == term; reply.NextTryIndex-- {

@@ -3,9 +3,11 @@ package raft
 import (
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"6.824/labrpc"
+	"github.com/sirupsen/logrus"
 )
 
 // import "bytes"
@@ -45,6 +47,10 @@ type Raft struct {
 	chanGrantVote chan bool
 	chanWinElect  chan bool
 	chanHeartbeat chan bool
+
+	// misc
+	isKilled int32
+	logger   *logrus.Entry
 }
 
 func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int, snapshot []byte) bool {
@@ -156,22 +162,6 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 	return ok
 }
 
-func (rf *Raft) broadcastRequestVote() {
-	rf.mu.Lock()
-	args := &RequestVoteArgs{}
-	args.Term = rf.currentTerm
-	args.CandidateId = rf.me
-	args.LastLogIndex = rf.getLastLogIndex()
-	args.LastLogTerm = rf.getLastLogTerm()
-	rf.mu.Unlock()
-
-	for server := range rf.peers {
-		if server != rf.me && rf.state == STATE_CANDIDATE {
-			go rf.sendRequestVote(server, args, &RequestVoteReply{})
-		}
-	}
-}
-
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 
@@ -220,39 +210,6 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	return ok
 }
 
-func (rf *Raft) commitLog() {
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
-
-	for i := rf.lastApplied + 1; i <= rf.commitIndex; i++ {
-		rf.chanApply <- ApplyMsg{CommandIndex: i, CommandValid: true, Command: rf.log[i].Command}
-	}
-	rf.lastApplied = rf.commitIndex
-}
-
-func (rf *Raft) broadcastAppendEntries() {
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
-
-	for server := range rf.peers {
-		if server != rf.me && rf.state == STATE_LEADER {
-			args := &AppendEntriesArgs{}
-			args.Term = rf.currentTerm
-			args.LeaderId = rf.me
-			args.PrevLogIndex = rf.nextIndex[server] - 1
-			if args.PrevLogIndex >= 0 {
-				args.PrevLogTerm = rf.log[args.PrevLogIndex].Term
-			}
-			if rf.nextIndex[server] <= rf.getLastLogIndex() {
-				args.Entries = rf.log[rf.nextIndex[server]:]
-			}
-			args.LeaderCommit = rf.commitIndex
-
-			go rf.sendAppendEntries(server, args, &AppendEntriesReply{})
-		}
-	}
-}
-
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	// Your code here (2B).
 	rf.mu.Lock()
@@ -266,19 +223,23 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		term = rf.currentTerm
 		index = rf.getLastLogIndex() + 1
 		rf.log = append(rf.log, LogEntry{Term: term, Command: command})
+		go rf.broadcastAppendEntries()
 	}
-
-	// rf.mu.Unlock()
 
 	return index, term, isLeader
 }
 
 func (rf *Raft) Kill() {
 	// Your code here, if desired.
+	atomic.StoreInt32(&rf.isKilled, 1)
+}
+
+func (rf *Raft) killed() bool {
+	return atomic.LoadInt32(&rf.isKilled) == 1
 }
 
 func (rf *Raft) Run() {
-	for {
+	for !rf.killed() {
 		rf.mu.Lock()
 		state := rf.state
 		rf.mu.Unlock()
@@ -344,6 +305,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.chanWinElect = make(chan bool, 100)
 	rf.chanHeartbeat = make(chan bool, 100)
 
+	rf.logger = logrus.WithField("id", rf.me)
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 
