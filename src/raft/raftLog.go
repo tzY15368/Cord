@@ -22,16 +22,21 @@ func (rf *Raft) dumpLog() {
 
 func (rf *Raft) commitLog() {
 	rf.mu.Lock()
-	defer rf.mu.Unlock()
 	baseIndex := rf.log[0].Index
+	cmds := make([]ApplyMsg, 0)
 	for i := rf.lastApplied + 1; i <= rf.commitIndex; i++ {
-		rf.chanApply <- ApplyMsg{
-			CommandIndex: i,
+		cmds = append(cmds, ApplyMsg{
 			CommandValid: true,
+			CommandIndex: i,
 			Command:      rf.log[i-baseIndex].Command,
-		}
+		})
 	}
+	// todo: this is safe as long as channel writes are FIFO. otherwise there may be replays
 	rf.lastApplied = rf.commitIndex
+	rf.mu.Unlock()
+	for _, msg := range cmds {
+		rf.chanApply <- msg
+	}
 }
 
 func (rf *Raft) getLastLogTerm() int {

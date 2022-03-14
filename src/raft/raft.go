@@ -2,7 +2,6 @@ package raft
 
 import (
 	"math/rand"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -17,7 +16,8 @@ import (
 // A Go object implementing a single Raft peer.
 //
 type Raft struct {
-	mu        sync.Mutex          // Lock to protect shared access to this peer's state
+	//mu        sync.Mutex          // Lock to protect shared access to this peer's state
+	mu        *mutex
 	peers     []*labrpc.ClientEnd // RPC end points of all peers
 	persister *Persister          // Object to hold this peer's persisted state
 	me        int                 // this peer's index into peers[]
@@ -51,6 +51,8 @@ type Raft struct {
 	// misc
 	isKilled int32
 	logger   *logrus.Entry
+
+	// snapshot
 }
 
 // return currentTerm and whether this server
@@ -108,7 +110,12 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	defer rf.persist()
-
+	defer func() {
+		err := recover()
+		if err != nil {
+			rf.logger.Panic(err)
+		}
+	}()
 	if !ok || rf.state != STATE_LEADER || args.Term != rf.currentTerm {
 		return ok
 	}
@@ -166,6 +173,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	if isLeader {
 		term = rf.currentTerm
 		index = rf.getLastLogIndex() + 1
+		rf.logger.WithField("command", command).Info("start: got command")
 		rf.log = append(rf.log, LogEntry{Index: index, Term: term, Command: command})
 		go rf.broadcastAppendEntries()
 	}
@@ -182,7 +190,74 @@ func (rf *Raft) killed() bool {
 	return atomic.LoadInt32(&rf.isKilled) == 1
 }
 
-func (rf *Raft) Run() {
+// func (rf *Raft) followerTicker() {
+// RestartFollower:
+// 	<-rf.becomeFollower
+// 	for !rf.killed() {
+// 		select {
+// 		case <-rf.chanGrantVote:
+// 		case <-rf.chanHeartbeat:
+// 		case <-time.After(time.Millisecond * time.Duration(rand.Intn(200)+300)):
+// 			rf.mu.Lock()
+// 			rf.logger.Warn("heartbeat timeout")
+// 			rf.state = STATE_CANDIDATE
+// 			rf.becomeCandidate <- struct{}{}
+// 			rf.mu.Unlock()
+// 			goto RestartFollower
+// 		}
+// 	}
+// }
+
+// func (rf *Raft) candidateTicker() {
+// RestartCandidate:
+// 	<-rf.becomeCandidate
+// 	rf.mu.Lock()
+// 	rf.currentTerm++
+// 	rf.votedFor = rf.me
+// 	rf.voteCount = 1
+// 	rf.persist()
+// 	rf.mu.Unlock()
+// 	go rf.broadcastRequestVote()
+// 	for !rf.killed() {
+// 		select {
+
+// 		case <-rf.chanHeartbeat:
+// 			rf.mu.Lock()
+// 			rf.state = STATE_FOLLOWER
+// 			rf.mu.Unlock()
+// 			rf.becomeFollower <- struct{}{}
+// 			goto RestartCandidate
+// 		case <-rf.chanWinElect:
+// 			rf.logger.Info("election: became leader")
+// 			rf.mu.Lock()
+// 			rf.state = STATE_LEADER
+// 			rf.becomeLeader <- struct{}{}
+// 			nextIndex := rf.getLastLogIndex() + 1
+// 			for i := range rf.nextIndex {
+// 				rf.nextIndex[i] = nextIndex
+// 			}
+// 			rf.mu.Unlock()
+// 			goto RestartCandidate
+// 		case <-time.After(electionTimeout):
+// 			rf.becomeCandidate <- struct{}{}
+// 			goto RestartCandidate
+// 		}
+// 	}
+// }
+
+// func (rf *Raft) leaderTicker() {
+// 	for range rf.becomeLeader {
+// 		rf.mu.Lock()
+// 		state := rf.state
+// 		rf.mu.Unlock()
+// 		for !rf.killed() && state == STATE_LEADER {
+// 			go rf.broadcastAppendEntries()
+// 			time.Sleep(hearbeatInterval)
+// 		}
+// 	}
+// }
+
+func (rf *Raft) ticker() {
 	for !rf.killed() {
 		rf.mu.Lock()
 		state := rf.state
@@ -194,6 +269,7 @@ func (rf *Raft) Run() {
 			case <-rf.chanHeartbeat:
 			case <-time.After(time.Millisecond * time.Duration(rand.Intn(200)+300)):
 				rf.mu.Lock()
+				rf.logger.Warn("heartbeat timeout")
 				rf.state = STATE_CANDIDATE
 				rf.mu.Unlock()
 			}
@@ -215,6 +291,7 @@ func (rf *Raft) Run() {
 				rf.state = STATE_FOLLOWER
 				rf.mu.Unlock()
 			case <-rf.chanWinElect:
+				rf.logger.Info("election: became leader")
 				rf.mu.Lock()
 				// rf.nextIndex = make([]int, len(rf.peers))
 				// rf.matchIndex = make([]int, len(rf.peers))
@@ -226,6 +303,7 @@ func (rf *Raft) Run() {
 			case <-time.After(electionTimeout):
 			}
 		}
+		//time.Sleep(30 * time.Millisecond)
 	}
 }
 
@@ -235,7 +313,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.peers = peers
 	rf.persister = persister
 	rf.me = me
-
+	rf.mu = makeLock(rf)
 	// Your initialization code here (2A, 2B, 2C).
 	rf.state = STATE_FOLLOWER
 	rf.voteCount = 0
@@ -258,7 +336,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 
-	go rf.Run()
+	go rf.ticker()
 
 	return rf
 }

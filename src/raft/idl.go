@@ -65,17 +65,20 @@ type AppendEntriesReply struct {
 type InstallSnapshotArgs struct {
 	// leader’s term
 	Term int
+
 	// so follower can redirect clients
 	LeaderID int
+
 	// the snapshot replaces all entries up through
 	// and including this index
 	LastIncludedIndex int
 	LastIncludedTerm  int
-	// raw bytes of the snapshot chunk, starting at offset
-	Offset int
 
 	// byte offset where chunk is positioned in the
 	// snapshot file
+	Offset int
+
+	// raw bytes of the snapshot chunk, starting at offset
 	Data []byte
 
 	// true if this is the last chunk
