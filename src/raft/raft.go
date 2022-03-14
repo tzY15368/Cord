@@ -49,9 +49,9 @@ type Raft struct {
 	chanHeartbeat chan bool
 
 	// misc
-	isKilled int32
-	logger   *logrus.Entry
-
+	isKilled      int32
+	logger        *logrus.Entry
+	applyMsgQueue *msgQueue
 	// snapshot
 }
 
@@ -333,6 +333,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.nextIndex = make([]int, len(rf.peers))
 	rf.matchIndex = make([]int, len(rf.peers))
 	rf.logger = logrus.WithField("id", rf.me)
+	rf.applyMsgQueue = NewQueue(rf.chanApply)
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 
