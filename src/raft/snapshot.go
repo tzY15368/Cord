@@ -27,10 +27,10 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	rf.logger.WithField("raw", cmd).WithField("index", index).Info("snapshot: got snapshot")
 	rf.logger.Info("getting lock")
 	// 心跳超时也是因为他先block了leader的lock，导致leader的其他操作也拿不到lock，自然会超时
-	rf.mu.Lock()
-	panic("got lock")
+	//rf.mu.Lock()
+	//panic("got lock")
 
-	defer rf.mu.Unlock()
+	//defer rf.mu.Unlock()
 	// rf.dumpLog()
 	// if index > rf.commitIndex {
 	// 	rf.logger.WithFields(logrus.Fields{
