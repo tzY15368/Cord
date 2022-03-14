@@ -15,6 +15,11 @@ func (rf *Raft) hasConflictLog(leaderLog []LogEntry, localLog []LogEntry) bool {
 	return false
 }
 
+// dumpLog not thread safe
+func (rf *Raft) dumpLog() {
+	rf.logger.Infof("log: %+v", rf.log)
+}
+
 func (rf *Raft) commitLog() {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()

@@ -43,13 +43,7 @@ type RequestVoteArgs struct {
 	LastLogIndex int
 	LastLogTerm  int
 }
-
-//
-// example RequestVote RPC reply structure.
-// field names must start with capital letters!
-//
 type RequestVoteReply struct {
-	// Your data here (2A).
 	Term        int
 	VoteGranted bool
 }
@@ -66,4 +60,29 @@ type AppendEntriesReply struct {
 	Term         int
 	Success      bool
 	NextTryIndex int
+}
+
+type InstallSnapshotArgs struct {
+	// leader’s term
+	Term int
+	// so follower can redirect clients
+	LeaderID int
+	// the snapshot replaces all entries up through
+	// and including this index
+	LastIncludedIndex int
+	LastIncludedTerm  int
+	// raw bytes of the snapshot chunk, starting at offset
+	Offset int
+
+	// byte offset where chunk is positioned in the
+	// snapshot file
+	Data []byte
+
+	// true if this is the last chunk
+	Done bool
+}
+
+type InstallSnapshotReply struct {
+	// currentTerm, for leader to update itself
+	Term int
 }

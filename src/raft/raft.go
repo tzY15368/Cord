@@ -1,13 +1,11 @@
 package raft
 
 import (
-	"bytes"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"6.824/labgob"
 	"6.824/labrpc"
 	"github.com/sirupsen/logrus"
 )
@@ -55,22 +53,6 @@ type Raft struct {
 	logger   *logrus.Entry
 }
 
-func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int, snapshot []byte) bool {
-
-	// Your code here (2D).
-
-	return true
-}
-
-// the service says it has created a snapshot that has
-// all info up to and including index. this means the
-// service no longer needs the log through (and including)
-// that index. Raft should now trim its log as much as possible.
-func (rf *Raft) Snapshot(index int, snapshot []byte) {
-	// Your code here (2D).
-
-}
-
 // return currentTerm and whether this server
 // believes it is the leader.
 func (rf *Raft) GetState() (int, bool) {
@@ -80,44 +62,6 @@ func (rf *Raft) GetState() (int, bool) {
 	term := rf.currentTerm
 	isleader := (rf.state == STATE_LEADER)
 	return term, isleader
-}
-
-//
-// save Raft's persistent state to stable storage,
-// where it can later be retrieved after a crash and restart.
-// see paper's Figure 2 for a description of what should be persistent.
-//
-func (rf *Raft) persist() {
-	// unsafe, use inside locks
-	w := new(bytes.Buffer)
-	e2 := labgob.NewEncoder(w)
-	e2.Encode(rf.currentTerm)
-	e2.Encode(rf.votedFor)
-	e2.Encode(rf.log)
-	rf.persister.SaveRaftState(w.Bytes())
-	rf.logger.Debug("save persist ok")
-}
-
-//
-// restore previously persisted state.
-//
-func (rf *Raft) readPersist(data []byte) {
-	r := bytes.NewBuffer(data)
-	d := labgob.NewDecoder(r)
-
-	var term, votedFor int
-	var logs []LogEntry
-
-	if d.Decode(&term) != nil || d.Decode(&votedFor) != nil || d.Decode(&logs) != nil {
-		rf.logger.Warn("persist: read persist failed")
-	} else {
-		rf.mu.Lock()
-		rf.currentTerm = term
-		rf.votedFor = votedFor
-		rf.log = logs
-		rf.mu.Unlock()
-		rf.logger.Info("persist: read persist ok")
-	}
 }
 
 func (rf *Raft) isUpToDate(candidateTerm int, candidateIndex int) bool {
