@@ -7,6 +7,13 @@ const (
 	hearbeatInterval = time.Millisecond * 150
 )
 
+func (rf *Raft) panicHandler() {
+	err := recover()
+	if err != nil {
+		rf.logger.Panic(err)
+	}
+}
+
 //
 // the service or tester wants to create a Raft server. the ports
 // of all the Raft servers (including this one) are in peers[]. this

@@ -4,6 +4,7 @@ import (
 	"bytes"
 
 	"6.824/labgob"
+	"github.com/sirupsen/logrus"
 )
 
 func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int, snapshot []byte) bool {
@@ -25,27 +26,28 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	var cmd interface{}
 	d.Decode(&cmd)
 	rf.logger.WithField("raw", cmd).WithField("index", index).Info("snapshot: got snapshot")
-	rf.logger.Info("getting lock")
+	rf.logger.Debug("snapshot: getting lock")
 	// 心跳超时也是因为他先block了leader的lock，导致leader的其他操作也拿不到lock，自然会超时
-	//rf.mu.Lock()
+	rf.mu.Lock()
 	//panic("got lock")
 
-	//defer rf.mu.Unlock()
-	// rf.dumpLog()
-	// if index > rf.commitIndex {
-	// 	rf.logger.WithFields(logrus.Fields{
-	// 		"index": index, "commitIndex": rf.commitIndex,
-	// 	}).Warn("snapshot: failed due to invalid index")
-	// }
-	// baseIndex := rf.log[0].Index
-	// realOffset := index - baseIndex + 1
-	// if realOffset+1 > len(rf.log) {
-	// 	rf.logger.WithField("index", index).WithField("lastlogindex", rf.getLastLogIndex()).
-	// 		Panic("snapshot: invalid index")
-	// }
-	// rf.log = rf.log[realOffset:]
-	// rf.dumpLog()
-	// rf.logger.WithFields(logrus.Fields{
-	// 	"base": baseIndex, "len": realOffset,
-	// }).Info("compacted logs")
+	defer rf.mu.Unlock()
+	rf.dumpLog()
+	// commitIndex始终小于等于maxIndex，所以不用担心
+
+	baseIndex := rf.log[0].Index
+	fields := logrus.Fields{
+		"index": index, "commitIndex": rf.commitIndex, "baseIndex": baseIndex,
+	}
+	if index > rf.commitIndex {
+		rf.logger.WithFields(fields).Panic("snapshot: failed due to invalid index")
+	} else {
+		rf.logger.WithFields(fields).Info("snapshot: params:")
+	}
+	newIndex := index - baseIndex
+	rf.log = rf.log[newIndex:]
+	rf.dumpLog()
+	rf.logger.WithFields(logrus.Fields{
+		"base": baseIndex, "len": newIndex,
+	}).Info("compacted logs")
 }

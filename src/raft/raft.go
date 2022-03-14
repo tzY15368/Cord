@@ -110,12 +110,7 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	defer rf.persist()
-	defer func() {
-		err := recover()
-		if err != nil {
-			rf.logger.Panic(err)
-		}
-	}()
+	defer rf.panicHandler()
 	if !ok || rf.state != STATE_LEADER || args.Term != rf.currentTerm {
 		return ok
 	}
@@ -141,7 +136,7 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 		// find if there exists an N to update commitIndex
 		count := 1
 
-		if rf.log[N].Term == rf.currentTerm {
+		if rf.log[N-baseIndex].Term == rf.currentTerm {
 			for i := range rf.peers {
 				if i != rf.me && rf.matchIndex[i] >= N {
 					count++

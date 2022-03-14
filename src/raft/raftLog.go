@@ -17,7 +17,7 @@ func (rf *Raft) hasConflictLog(leaderLog []LogEntry, localLog []LogEntry) bool {
 
 // dumpLog not thread safe
 func (rf *Raft) dumpLog() {
-	rf.logger.Infof("log: %+v", rf.log)
+	rf.logger.Debugf("log: %+v", rf.log)
 }
 
 func (rf *Raft) commitLog() {
