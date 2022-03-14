@@ -64,23 +64,28 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	}
 
 	// 待优化
-	if args.PrevLogIndex > 0 && args.PrevLogTerm != rf.log[args.PrevLogIndex].Term {
-		term := rf.log[args.PrevLogIndex].Term
-		for reply.NextTryIndex = args.PrevLogIndex - 1; reply.NextTryIndex >= 0 && rf.log[reply.NextTryIndex].Term == term; reply.NextTryIndex-- {
-		}
-		reply.NextTryIndex++
-	} else {
-		var restLog []LogEntry
-		rf.log, restLog = rf.log[:args.PrevLogIndex+1], rf.log[args.PrevLogIndex+1:]
+	baseIndex := rf.log[0].Index
 
-		if rf.hasConflictLog(args.Entries, restLog) || len(restLog) < len(args.Entries) {
+	if args.PrevLogIndex >= baseIndex && args.PrevLogTerm != rf.log[args.PrevLogIndex-baseIndex].Term {
+		// if entry log[prevLogIndex] conflicts with new one, there may be conflict entries before.
+		// we can bypass all entries during the problematic term to speed up.
+		term := rf.log[args.PrevLogIndex-baseIndex].Term
+		for i := args.PrevLogIndex - 1; i >= baseIndex && rf.log[i-baseIndex].Term == term; i-- {
+			reply.NextTryIndex = i + 1
+		}
+	} else if args.PrevLogIndex >= baseIndex-1 {
+		// otherwise log up to prevLogIndex are safe.
+		// we can merge lcoal log and entries from leader, and apply log if commitIndex changes.
+		var restLog []LogEntry
+		rf.log, restLog = rf.log[:args.PrevLogIndex-baseIndex+1], rf.log[args.PrevLogIndex-baseIndex+1:]
+		if rf.hasConflictLog(restLog, args.Entries) || len(restLog) < len(args.Entries) {
 			rf.log = append(rf.log, args.Entries...)
 		} else {
 			rf.log = append(rf.log, restLog...)
 		}
 
 		reply.Success = true
-		reply.NextTryIndex = args.PrevLogIndex
+		reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
 
 		if args.LeaderCommit > rf.commitIndex {
 			if rf.getLastLogIndex() < args.LeaderCommit {

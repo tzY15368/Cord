@@ -4,17 +4,19 @@ func (rf *Raft) broadcastAppendEntries() {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
+	baseIndex := rf.log[0].Index
+
 	for server := range rf.peers {
 		if server != rf.me && rf.state == STATE_LEADER {
 			args := &AppendEntriesArgs{}
 			args.Term = rf.currentTerm
 			args.LeaderId = rf.me
 			args.PrevLogIndex = rf.nextIndex[server] - 1
-			if args.PrevLogIndex >= 0 {
-				args.PrevLogTerm = rf.log[args.PrevLogIndex].Term
+			if args.PrevLogIndex >= baseIndex {
+				args.PrevLogTerm = rf.log[args.PrevLogIndex-baseIndex].Term
 			}
 			if rf.nextIndex[server] <= rf.getLastLogIndex() {
-				args.Entries = rf.log[rf.nextIndex[server]:]
+				args.Entries = rf.log[rf.nextIndex[server]-baseIndex:]
 			}
 			args.LeaderCommit = rf.commitIndex
 

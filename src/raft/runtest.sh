@@ -1,0 +1,1 @@
+go test -run 2C -count=1 -failfast -race

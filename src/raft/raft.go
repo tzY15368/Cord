@@ -82,14 +82,6 @@ func (rf *Raft) GetState() (int, bool) {
 	return term, isleader
 }
 
-func (rf *Raft) getLastLogTerm() int {
-	return rf.log[len(rf.log)-1].Term
-}
-
-func (rf *Raft) getLastLogIndex() int {
-	return len(rf.log) - 1
-}
-
 //
 // save Raft's persistent state to stable storage,
 // where it can later be retrieved after a crash and restart.
@@ -184,15 +176,18 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 		return ok
 	}
 	if reply.Success {
-		rf.matchIndex[server] = args.PrevLogIndex + len(args.Entries)
-		rf.nextIndex[server] = rf.matchIndex[server] + 1
+		if len(args.Entries) > 0 {
+			rf.nextIndex[server] = args.Entries[len(args.Entries)-1].Index + 1
+			rf.matchIndex[server] = rf.nextIndex[server] - 1
+		}
 	} else {
 		rf.nextIndex[server] = reply.NextTryIndex
 	}
 
-	// If there exists an N such that N > commitIndex, a majority of
-	// matchIndex[i] >= N, and log[N].term == currentTerm: set commitIndex = N
-	for N := rf.getLastLogIndex(); N > rf.commitIndex; N-- {
+	baseIndex := rf.log[0].Index
+
+	for N := rf.getLastLogIndex(); N > rf.commitIndex && rf.log[N-baseIndex].Term == rf.currentTerm; N-- {
+		// find if there exists an N to update commitIndex
 		count := 1
 
 		if rf.log[N].Term == rf.currentTerm {
@@ -227,7 +222,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	if isLeader {
 		term = rf.currentTerm
 		index = rf.getLastLogIndex() + 1
-		rf.log = append(rf.log, LogEntry{Term: term, Command: command})
+		rf.log = append(rf.log, LogEntry{Index: index, Term: term, Command: command})
 		go rf.broadcastAppendEntries()
 	}
 
