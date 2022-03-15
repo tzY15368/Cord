@@ -22,6 +22,7 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 			rf.state = STATE_FOLLOWER
 			rf.currentTerm = reply.Term
 			rf.votedFor = -1
+			rf.logger.WithField("newTerm", rf.currentTerm).Info("appendEntry: became follower due to higher client term")
 		}
 
 		if reply.VoteGranted {
@@ -55,6 +56,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.state = STATE_FOLLOWER
 		rf.currentTerm = args.Term
 		rf.votedFor = -1
+		rf.logger.WithField("newTerm", rf.currentTerm).Info("appendEntry: became follower due to higher client term")
 	}
 
 	reply.Term = rf.currentTerm

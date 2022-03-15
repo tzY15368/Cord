@@ -74,8 +74,10 @@ type InstallSnapshotArgs struct {
 	LastIncludedIndex int
 	LastIncludedTerm  int
 
+	LastIncludedCommand []byte
 	// byte offset where chunk is positioned in the
 	// snapshot file
+	// if offset == -1: 整段打包，无视分段
 	Offset int
 
 	// raw bytes of the snapshot chunk, starting at offset

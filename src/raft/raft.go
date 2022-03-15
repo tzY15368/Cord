@@ -84,7 +84,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		index = rf.getLastLogIndex() + 1
 		rf.logger.WithField("command", command).Info("start: got command")
 		rf.log = append(rf.log, LogEntry{Index: index, Term: term, Command: command})
-		go rf.broadcastAppendEntries()
+		// go rf.broadcastAppendEntries()
 	}
 
 	return index, term, isLeader
@@ -104,14 +104,15 @@ func (rf *Raft) ticker() {
 		rf.mu.Lock()
 		state := rf.state
 		rf.mu.Unlock()
+		diff := time.Millisecond * time.Duration(rand.Intn(200)+300)
 		switch state {
 		case STATE_FOLLOWER:
 			select {
 			case <-rf.chanGrantVote:
 			case <-rf.chanHeartbeat:
-			case <-time.After(time.Millisecond * time.Duration(rand.Intn(200)+300)):
+			case <-time.After(diff):
 				rf.mu.Lock()
-				rf.logger.Warn("heartbeat timeout")
+				rf.logger.WithField("now", time.Now()).WithField("diff", diff).Warn("heartbeat timeout")
 				rf.state = STATE_CANDIDATE
 				rf.mu.Unlock()
 			}

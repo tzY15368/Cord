@@ -10,7 +10,7 @@ import (
 
 func init() {
 
-	var logFilename = "raft-out"
+	var logFilename = "raft-out.log"
 	os.Remove(logFilename)
 	logFile, err := os.OpenFile(logFilename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {

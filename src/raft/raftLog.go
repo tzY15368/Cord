@@ -38,10 +38,36 @@ func (rf *Raft) commitLog() {
 	rf.mu.Unlock()
 }
 
+// get lastlog term not thread safe
 func (rf *Raft) getLastLogTerm() int {
+	// if len(rf.log) == 0 {
+	// 	if rf.lastIncludedTerm == 0 {
+	// 		rf.logger.Panic("log: invalid log state:term")
+	// 	}
+	// 	return rf.lastIncludedTerm
+	// }
 	return rf.log[len(rf.log)-1].Term
 }
 
+// getlastlogindex not thread safe
 func (rf *Raft) getLastLogIndex() int {
+	// if len(rf.log) == 0 {
+	// 	if rf.lastIncludedIndex == 0 {
+	// 		rf.logger.Panic("log: invalid log state:index")
+	// 	}
+	// 	return rf.lastIncludedIndex
+	// }
 	return rf.log[len(rf.log)-1].Index
 }
+
+// 具体是什么？还得仔细想下
+// 目的是正确处理空log的情况
+// func (rf *Raft) getBaseLogIndex() int {
+// 	if len(rf.log) == 0 {
+// 		if rf.lastIncludedIndex == 0 {
+// 			rf.logger.Panic("log: invalid log state:index")
+// 		}
+// 		return rf.lastIncludedIndex
+// 	}
+// 	return rf.log[0].Index
+// }

@@ -1026,6 +1026,7 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 	leader1 := cfg.checkOneLeader()
 
 	for i := 0; i < iters; i++ {
+		logrus.Info("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 		victim := (leader1 + 1) % servers
 		sender := leader1
 		if i%3 == 1 {
@@ -1035,6 +1036,7 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 
 		if disconnect {
 			cfg.disconnect(victim)
+			logrus.Info("--------disconnect---------", victim)
 			cfg.one(rand.Int(), servers-1, true)
 		}
 		if crash {
@@ -1057,7 +1059,9 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 			// reconnect a follower, who maybe behind and
 			// needs to rceive a snapshot to catch up.
 			cfg.connect(victim)
+			logrus.Info("-=-=-=-=-=-=-=-=-=-=-=-=-")
 			cfg.one(rand.Int(), servers, true)
+			logrus.Info("___________________________")
 			leader1 = cfg.checkOneLeader()
 		}
 		if crash {

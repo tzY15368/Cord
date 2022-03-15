@@ -1,6 +1,10 @@
 package raft
 
-import "github.com/sirupsen/logrus"
+import (
+	"fmt"
+
+	"github.com/sirupsen/logrus"
+)
 
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.mu.Lock()
@@ -16,11 +20,13 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 
+	// 比如： 一个实例断开了，自己进行两次失败选举，term=3，连回来之后另外两个先变回follower重新选
 	if args.Term > rf.currentTerm {
 		// become follower and update current term
 		rf.state = STATE_FOLLOWER
 		rf.currentTerm = args.Term
 		rf.votedFor = -1
+		rf.logger.WithField("newTerm", rf.currentTerm).Info("appendEntry: became follower due to higher client term")
 	}
 
 	// confirm heartbeat to refresh timeout
@@ -126,7 +132,7 @@ func (rf *Raft) broadcastAppendEntries() {
 	defer rf.mu.Unlock()
 	defer rf.panicHandler()
 	if rf.state != STATE_LEADER {
-		rf.logger.Panic("invalid state??")
+		rf.logger.Warn("broadcast: state changed, cancel broadcast")
 	}
 	baseIndex := rf.log[0].Index
 
@@ -141,14 +147,34 @@ func (rf *Raft) broadcastAppendEntries() {
 			}
 			if rf.nextIndex[server] <= rf.getLastLogIndex() {
 				rf.logger.WithFields(logrus.Fields{
-					"nextindex": rf.nextIndex[server],
-					"baseIndex": baseIndex,
+					fmt.Sprintf("nextindex[%d]", server): rf.nextIndex[server],
+					"baseIndex":                          baseIndex,
 				}).Debug("broadcast: entries diff:")
 				if rf.nextIndex[server] < baseIndex {
-					rf.logger.Warn("nextindex < baseIndex, skipping")
-					continue
+					if baseIndex > rf.commitIndex {
+						rf.logger.WithFields(logrus.Fields{
+							"commitindex": rf.commitIndex,
+						}).Panic("broadcast: baseindex > commitindex, log is lost")
+					}
+					// 这里如果阻塞会有问题，如果snapshot很大，用时很长，可能会心跳超时
+					// 因此用发空的心跳的方式维持leader状态，下次重试
+					snapshotArgs := &InstallSnapshotArgs{
+						Term:              rf.currentTerm,
+						LeaderID:          rf.me,
+						LastIncludedIndex: rf.lastIncludedIndex,
+						LastIncludedTerm:  rf.lastIncludedTerm,
+						Offset:            -1,
+						Data:              rf.snapshot,
+						Done:              true,
+					}
+
+					go rf.sendInstallSnapshot(server, snapshotArgs, &InstallSnapshotReply{})
+
+					rf.logger.Warn(fmt.Sprintf("broadcast: nextindex[%d] < baseIndex, sending snapshot instead", server))
+					args.Entries = make([]LogEntry, 0)
+				} else {
+					args.Entries = rf.log[rf.nextIndex[server]-baseIndex:]
 				}
-				args.Entries = rf.log[rf.nextIndex[server]-baseIndex:]
 			}
 			args.LeaderCommit = rf.commitIndex
 
