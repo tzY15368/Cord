@@ -48,12 +48,13 @@ type RequestVoteReply struct {
 	VoteGranted bool
 }
 type AppendEntriesArgs struct {
-	Term         int
-	LeaderId     int
-	PrevLogIndex int
-	PrevLogTerm  int
-	Entries      []LogEntry
-	LeaderCommit int
+	Term           int
+	LeaderId       int
+	PrevLogIndex   int
+	PrevLogTerm    int
+	Entries        []LogEntry
+	LeaderCommit   int
+	ExpectSnapshot bool
 }
 
 type AppendEntriesReply struct {
@@ -74,7 +75,6 @@ type InstallSnapshotArgs struct {
 	LastIncludedIndex int
 	LastIncludedTerm  int
 
-	LastIncludedCommand []byte
 	// byte offset where chunk is positioned in the
 	// snapshot file
 	// if offset == -1: 整段打包，无视分段

@@ -1,5 +1,7 @@
 package raft
 
+import "github.com/sirupsen/logrus"
+
 type LogEntry struct {
 	Term    int
 	Index   int
@@ -22,8 +24,8 @@ func (rf *Raft) dumpLog() {
 
 func (rf *Raft) commitLog() {
 	rf.mu.Lock()
-	baseIndex := rf.log[0].Index
-
+	//	baseIndex := rf.log[0].Index
+	baseIndex := rf.getBaseLogIndex()
 	for i := rf.lastApplied + 1; i <= rf.commitIndex; i++ {
 		msg := ApplyMsg{
 			CommandValid: true,
@@ -40,34 +42,72 @@ func (rf *Raft) commitLog() {
 
 // get lastlog term not thread safe
 func (rf *Raft) getLastLogTerm() int {
-	// if len(rf.log) == 0 {
-	// 	if rf.lastIncludedTerm == 0 {
-	// 		rf.logger.Panic("log: invalid log state:term")
-	// 	}
-	// 	return rf.lastIncludedTerm
-	// }
+	if len(rf.log) == 0 {
+		if rf.lastIncludedTerm == 0 {
+			rf.logger.Panic("log: invalid log state:term")
+		} else {
+			rf.logger.
+				WithField("lastIncludedTerm", rf.lastIncludedTerm).
+				Info("no existing logs, returning lastincludedTerm")
+		}
+		return rf.lastIncludedTerm
+	}
 	return rf.log[len(rf.log)-1].Term
 }
 
 // getlastlogindex not thread safe
 func (rf *Raft) getLastLogIndex() int {
-	// if len(rf.log) == 0 {
-	// 	if rf.lastIncludedIndex == 0 {
-	// 		rf.logger.Panic("log: invalid log state:index")
-	// 	}
-	// 	return rf.lastIncludedIndex
-	// }
+	if len(rf.log) == 0 {
+		if rf.lastIncludedIndex == 0 {
+			rf.logger.Panic("log: invalid log state:index")
+		} else {
+			rf.logger.
+				WithField("lastIncludedIndex", rf.lastIncludedIndex).
+				Info("no existing logs, returning lastincludedIndex")
+		}
+		return rf.lastIncludedIndex
+	}
 	return rf.log[len(rf.log)-1].Index
 }
 
 // 具体是什么？还得仔细想下
 // 目的是正确处理空log的情况
-// func (rf *Raft) getBaseLogIndex() int {
-// 	if len(rf.log) == 0 {
-// 		if rf.lastIncludedIndex == 0 {
-// 			rf.logger.Panic("log: invalid log state:index")
-// 		}
-// 		return rf.lastIncludedIndex
-// 	}
-// 	return rf.log[0].Index
-// }
+func (rf *Raft) getBaseLogIndex() int {
+	if len(rf.log) == 0 {
+		if rf.lastIncludedIndex == 0 {
+			rf.logger.Panic("log: invalid log state:index")
+		} else {
+			rf.logger.
+				WithField("lastIncludedIndex", rf.lastIncludedIndex).
+				Info("no existing logs, returning lastincludedIndex")
+		}
+		return rf.lastIncludedIndex
+	}
+	return rf.log[0].Index
+}
+
+// getLogTermAtOffset not thread safe
+func (rf *Raft) getLogTermAtOffset(offset int) int {
+	if len(rf.log) == 0 {
+		if offset != 0 && rf.lastIncludedTerm == 0 {
+			rf.logger.WithFields(logrus.Fields{
+				"index": offset, "lastIncludedTerm": rf.lastIncludedTerm,
+			}).Panic("invalid state")
+		}
+		return rf.lastIncludedTerm
+	}
+	return rf.log[offset].Term
+}
+
+// getLogIndexAtOffset not thread safe
+func (rf *Raft) getLogIndexAtOffset(offset int) int {
+	if len(rf.log) == 0 {
+		if offset != 0 && rf.lastIncludedIndex == 0 {
+			rf.logger.WithFields(logrus.Fields{
+				"index": offset, "lastIncludedindex": rf.lastIncludedIndex,
+			}).Panic("invalid state")
+		}
+		return rf.lastIncludedIndex
+	}
+	return rf.log[offset].Index
+}

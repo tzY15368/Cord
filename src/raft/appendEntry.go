@@ -41,28 +41,43 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	}
 
 	// 待优化
-	baseIndex := rf.log[0].Index
+	baseIndex := rf.getBaseLogIndex()
+	// baseIndex := rf.log[0].Index
 
-	if args.PrevLogIndex >= baseIndex && args.PrevLogTerm != rf.log[args.PrevLogIndex-baseIndex].Term {
+	if args.PrevLogIndex >= baseIndex && args.PrevLogTerm != rf.getLogTermAtOffset(args.PrevLogIndex-baseIndex) {
 		// if entry log[prevLogIndex] conflicts with new one, there may be conflict entries before.
 		// we can bypass all entries during the problematic term to speed up.
-		term := rf.log[args.PrevLogIndex-baseIndex].Term
-		for i := args.PrevLogIndex - 1; i >= baseIndex && rf.log[i-baseIndex].Term == term; i-- {
+		rf.logger.WithField("args", fmt.Sprintf("%+v", args)).WithField("logterm", rf.getLogTermAtOffset(args.PrevLogIndex-baseIndex)).Info("cond failed")
+		term := rf.getLogTermAtOffset(args.PrevLogIndex - baseIndex)
+		for i := args.PrevLogIndex - 1; i >= baseIndex && rf.getLogTermAtOffset(i-baseIndex) == term; i-- {
 			reply.NextTryIndex = i + 1
 		}
 	} else if args.PrevLogIndex >= baseIndex-1 {
 		// otherwise log up to prevLogIndex are safe.
 		// we can merge lcoal log and entries from leader, and apply log if commitIndex changes.
-		var restLog []LogEntry
-		rf.log, restLog = rf.log[:args.PrevLogIndex-baseIndex+1], rf.log[args.PrevLogIndex-baseIndex+1:]
-		if rf.hasConflictLog(restLog, args.Entries) || len(restLog) < len(args.Entries) {
-			rf.log = append(rf.log, args.Entries...)
+		if len(rf.log) != 0 {
+			var restLog []LogEntry
+			rf.log, restLog = rf.log[:args.PrevLogIndex-baseIndex+1], rf.log[args.PrevLogIndex-baseIndex+1:]
+			if rf.hasConflictLog(restLog, args.Entries) || len(restLog) < len(args.Entries) {
+				rf.log = append(rf.log, args.Entries...)
+			} else {
+				rf.log = append(rf.log, restLog...)
+			}
+			reply.Success = true
+			reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
 		} else {
-			rf.log = append(rf.log, restLog...)
+			if args.PrevLogIndex == rf.getBaseLogIndex() {
+				// snapshot刚好接上
+				rf.log = append(rf.log, args.Entries...)
+				reply.Success = true
+				reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
+				rf.dumpLog()
+				rf.logger.Info("appendEntry: append after snapshot successful")
+			} else {
+				reply.NextTryIndex = rf.getBaseLogIndex() + 1
+				rf.logger.WithField("nextTryIndex", reply.NextTryIndex).Info("appendEntry: append after snapshot failed")
+			}
 		}
-
-		reply.Success = true
-		reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
 
 		if args.LeaderCommit > rf.commitIndex {
 			if rf.getLastLogIndex() < args.LeaderCommit {
@@ -98,10 +113,14 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 			rf.matchIndex[server] = rf.nextIndex[server] - 1
 		}
 	} else {
-		rf.nextIndex[server] = reply.NextTryIndex
+		if !args.ExpectSnapshot {
+
+			rf.nextIndex[server] = reply.NextTryIndex
+		}
 	}
 
-	baseIndex := rf.log[0].Index
+	baseIndex := rf.getBaseLogIndex()
+	// baseIndex := rf.log[0].Index
 
 	for N := rf.getLastLogIndex(); N > rf.commitIndex && rf.log[N-baseIndex].Term == rf.currentTerm; N-- {
 		// find if there exists an N to update commitIndex
@@ -134,16 +153,21 @@ func (rf *Raft) broadcastAppendEntries() {
 	if rf.state != STATE_LEADER {
 		rf.logger.Warn("broadcast: state changed, cancel broadcast")
 	}
-	baseIndex := rf.log[0].Index
+	baseIndex := rf.getBaseLogIndex()
+	// baseIndex := rf.log[0].Index
 
 	for server := range rf.peers {
 		if server != rf.me && rf.state == STATE_LEADER {
-			args := &AppendEntriesArgs{}
-			args.Term = rf.currentTerm
-			args.LeaderId = rf.me
-			args.PrevLogIndex = rf.nextIndex[server] - 1
+			args := &AppendEntriesArgs{
+				Term:         rf.currentTerm,
+				LeaderId:     rf.me,
+				PrevLogIndex: rf.nextIndex[server] - 1,
+			}
+
 			if args.PrevLogIndex >= baseIndex {
 				args.PrevLogTerm = rf.log[args.PrevLogIndex-baseIndex].Term
+			} else {
+				args.PrevLogTerm = rf.lastIncludedTerm
 			}
 			if rf.nextIndex[server] <= rf.getLastLogIndex() {
 				rf.logger.WithFields(logrus.Fields{
@@ -169,7 +193,7 @@ func (rf *Raft) broadcastAppendEntries() {
 					}
 
 					go rf.sendInstallSnapshot(server, snapshotArgs, &InstallSnapshotReply{})
-
+					args.ExpectSnapshot = true
 					rf.logger.Warn(fmt.Sprintf("broadcast: nextindex[%d] < baseIndex, sending snapshot instead", server))
 					args.Entries = make([]LogEntry, 0)
 				} else {

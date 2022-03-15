@@ -1,5 +1,6 @@
 package raft
 
+// isUPToDate not thread safe
 func (rf *Raft) isUpToDate(candidateTerm int, candidateIndex int) bool {
 	term, index := rf.getLastLogTerm(), rf.getLastLogIndex()
 	return candidateTerm > term || (candidateTerm == term && candidateIndex >= index)

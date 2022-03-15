@@ -34,8 +34,8 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	defer rf.persist()
 	rf.dumpLog()
 	// commitIndex始终小于等于maxIndex，所以不用担心
-
-	baseIndex := rf.log[0].Index
+	baseIndex := rf.getBaseLogIndex()
+	// baseIndex := rf.log[0].Index
 	fields := logrus.Fields{
 		"index": index, "commitIndex": rf.commitIndex, "baseIndex": baseIndex,
 	}
@@ -45,7 +45,11 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 		rf.logger.WithFields(fields).Info("snapshot: params:")
 	}
 	newIndex := index - baseIndex
-	lastIncludedEntry := rf.log[newIndex-1]
+	offset := newIndex - 1
+	if newIndex == 0 {
+		offset = 0
+	}
+	lastIncludedEntry := rf.log[offset]
 
 	// handle snapshot
 	rf.lastIncludedIndex = lastIncludedEntry.Index
@@ -68,7 +72,21 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	defer rf.mu.Unlock()
 	// 同步log，然后把snapshot里的状态发给applychan
 	rf.logger.Info("snapshot: installing snapshot")
-	baseIndex := rf.log[0].Index
+	//	baseIndex := rf.log[0].Index
+	baseIndex := rf.getBaseLogIndex()
+	if args.Term < rf.currentTerm {
+		reply.Term = rf.currentTerm
+		return
+	}
+
+	if args.Term > rf.currentTerm {
+		rf.state = STATE_FOLLOWER
+		rf.currentTerm = args.Term
+		rf.votedFor = -1
+		rf.logger.WithField("newTerm", rf.currentTerm).
+			Info("snapshot: became follower due to higher client term")
+	}
+	reply.Term = rf.currentTerm
 	if args.LastIncludedIndex <= baseIndex {
 		rf.logger.WithFields(logrus.Fields{
 			"lastincludedindex": args.LastIncludedIndex,
@@ -80,9 +98,10 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	rf.lastApplied = args.LastIncludedIndex
 	rf.commitIndex = args.LastIncludedIndex
 	rf.currentTerm = args.Term
+	rf.lastIncludedIndex = args.LastIncludedIndex
+	rf.lastIncludedTerm = args.LastIncludedTerm
 
 	// todo: ignore leaderid for now
-	reply.Term = rf.currentTerm
 	// persist after state change
 	rf.persist()
 
@@ -96,8 +115,10 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	rf.log = make([]LogEntry, 0)
 	rf.dumpLog()
 	rf.logger.Info("installed snapshot")
-	// 这里应该手动创建一条log，不然后面找不到
-	// go rf.commitLog()
+	// baseIndex和lastLogIndex
+	// baseindex是当前log的第一条，用于后面append确定index
+	// baseIndex应该就是lastincludedindex
+	// lastlogindex是当前实例已有的最后一条，也是lastincludedindex
 }
 
 // 如果appendentries发现对方nextindex过低，发snapshot,并阻塞??

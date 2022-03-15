@@ -122,6 +122,7 @@ func (rf *Raft) ticker() {
 		case STATE_CANDIDATE:
 			rf.mu.Lock()
 			rf.currentTerm++
+			rf.logger.WithField("term", rf.currentTerm).Info("election: became candidate")
 			rf.votedFor = rf.me
 			rf.voteCount = 1
 			rf.persist()
@@ -134,8 +135,8 @@ func (rf *Raft) ticker() {
 				rf.state = STATE_FOLLOWER
 				rf.mu.Unlock()
 			case <-rf.chanWinElect:
-				rf.logger.Info("election: became leader")
 				rf.mu.Lock()
+				rf.logger.WithField("term", rf.currentTerm).Info("election: became leader")
 				// rf.nextIndex = make([]int, len(rf.peers))
 				// rf.matchIndex = make([]int, len(rf.peers))
 				nextIndex := rf.getLastLogIndex() + 1
@@ -144,6 +145,9 @@ func (rf *Raft) ticker() {
 				}
 				rf.mu.Unlock()
 			case <-time.After(electionTimeout):
+				rf.mu.Lock()
+				rf.logger.WithField("term", rf.currentTerm).Info("election: timeout")
+				rf.mu.Unlock()
 			}
 		}
 		//time.Sleep(30 * time.Millisecond)
