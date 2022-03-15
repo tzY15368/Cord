@@ -20,7 +20,7 @@ func init() {
 	fileAndStdoutWriter := io.MultiWriter(logFile, os.Stdout)
 	logrus.SetOutput(ansicolor.NewAnsiColorWriter(fileAndStdoutWriter))
 
-	logLevel := logrus.InfoLevel
+	logLevel := logrus.DebugLevel
 	logrus.SetLevel(logLevel)
 	logrus.SetReportCaller(false)
 }
