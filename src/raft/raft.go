@@ -148,6 +148,9 @@ func (rf *Raft) ticker() {
 				rf.mu.Lock()
 				rf.logger.WithField("term", rf.currentTerm).Info("election: timeout")
 				rf.mu.Unlock()
+				additionalSleepTime := time.Duration(rand.Intn(30)) * time.Millisecond
+				time.Sleep(additionalSleepTime)
+				rf.logger.WithField("sleepTime", additionalSleepTime).Warn("election timeout, extra sleep")
 			}
 		}
 		//time.Sleep(30 * time.Millisecond)

@@ -1041,6 +1041,7 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 		}
 		if crash {
 			cfg.crash1(victim)
+			logrus.Info("--------crash--------", victim)
 			cfg.one(rand.Int(), servers-1, true)
 		}
 		// send enough to get a snapshot
@@ -1048,7 +1049,7 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 			cfg.rafts[sender].Start(rand.Int())
 		}
 		// let applier threads catch up with the Start()'s
-		logrus.Info("-----------------------------")
+		logrus.Info("-------------catchup-------------")
 		cfg.one(rand.Int(), servers-1, true)
 
 		logrus.Info("=============================")
@@ -1061,13 +1062,15 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 			cfg.connect(victim)
 			logrus.Info("-=-=-=-=-=-=-=-=-=-=-=-=-")
 			cfg.one(rand.Int(), servers, true)
-			logrus.Info("___________________________")
+			logrus.Info("___________disconnectone__________")
 			leader1 = cfg.checkOneLeader()
 		}
 		if crash {
 			cfg.start1(victim, cfg.applierSnap)
 			cfg.connect(victim)
+			logrus.Info("-=-=-=-=-= reboot -=-=-=-=-=-", victim)
 			cfg.one(rand.Int(), servers, true)
+			logrus.Info("_______________crashone__________")
 			leader1 = cfg.checkOneLeader()
 		}
 	}

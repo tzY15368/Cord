@@ -19,12 +19,21 @@ func (rf *Raft) hasConflictLog(leaderLog []LogEntry, localLog []LogEntry) bool {
 
 // dumpLog not thread safe
 func (rf *Raft) dumpLog() {
-	rf.logger.Debugf("log: %+v", rf.log)
+	rf.logger.WithFields(logrus.Fields{
+		"lastApplied":       rf.lastApplied,
+		"commitIndex":       rf.commitIndex,
+		"lastIncludedIndex": rf.lastIncludedIndex,
+	}).Debugf("log: %+v", rf.log)
 }
 
 func (rf *Raft) commitLog() {
 	rf.mu.Lock()
 	//	baseIndex := rf.log[0].Index
+	rf.unsafeCommitLog()
+	rf.mu.Unlock()
+}
+
+func (rf *Raft) unsafeCommitLog() {
 	baseIndex := rf.getBaseLogIndex()
 	for i := rf.lastApplied + 1; i <= rf.commitIndex; i++ {
 		msg := ApplyMsg{
@@ -37,7 +46,7 @@ func (rf *Raft) commitLog() {
 	}
 	// todo: this is safe as long as channel writes are FIFO. otherwise there may be replays
 	rf.lastApplied = rf.commitIndex
-	rf.mu.Unlock()
+
 }
 
 // get lastlog term not thread safe
@@ -48,7 +57,7 @@ func (rf *Raft) getLastLogTerm() int {
 		} else {
 			rf.logger.
 				WithField("lastIncludedTerm", rf.lastIncludedTerm).
-				Info("no existing logs, returning lastincludedTerm")
+				Debug("no existing logs, returning lastincludedTerm")
 		}
 		return rf.lastIncludedTerm
 	}
@@ -63,7 +72,7 @@ func (rf *Raft) getLastLogIndex() int {
 		} else {
 			rf.logger.
 				WithField("lastIncludedIndex", rf.lastIncludedIndex).
-				Info("no existing logs, returning lastincludedIndex")
+				Debug("no existing logs, returning lastincludedIndex")
 		}
 		return rf.lastIncludedIndex
 	}
@@ -79,7 +88,7 @@ func (rf *Raft) getBaseLogIndex() int {
 		} else {
 			rf.logger.
 				WithField("lastIncludedIndex", rf.lastIncludedIndex).
-				Info("no existing logs, returning lastincludedIndex")
+				Debug("no existing logs, returning lastincludedIndex")
 		}
 		return rf.lastIncludedIndex
 	}

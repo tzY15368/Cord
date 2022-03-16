@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"6.824/labgob"
+	"github.com/sirupsen/logrus"
 )
 
 // persist not thread safe
@@ -19,14 +20,19 @@ func (rf *Raft) persist() {
 	// state
 	e2.Encode(rf.currentTerm)
 	e2.Encode(rf.votedFor)
-	e2.Encode(rf.log)
 
 	// snapshot state
 	e2.Encode(rf.lastIncludedTerm)
 	e2.Encode(rf.lastIncludedIndex)
-	rf.persister.SaveRaftState(w.Bytes())
+
+	// log
+
+	e2.Encode(rf.log)
+
 	rf.persister.SaveStateAndSnapshot(w.Bytes(), rf.snapshot)
-	rf.logger.Debug("save persist ok")
+	rf.logger.WithFields(logrus.Fields{
+		"lastIncludedIndex": rf.lastIncludedIndex,
+	}).Debug("save persist ok")
 	// .WithField("at", time.Now())
 }
 
@@ -43,17 +49,42 @@ func (rf *Raft) readPersist() {
 	var logs []LogEntry
 	var lastIncludedTerm, lastIncludedIndex int
 
-	if d.Decode(&term) != nil || d.Decode(&votedFor) != nil || d.Decode(&logs) != nil || d.Decode(&lastIncludedTerm) != nil && d.Decode(&lastIncludedIndex) != nil {
-		rf.logger.Warn("persist: read persist failed")
-	} else {
-		rf.mu.Lock()
-		rf.currentTerm = term
-		rf.votedFor = votedFor
-		rf.log = logs
-		rf.lastIncludedIndex = lastIncludedIndex
-		rf.lastIncludedTerm = lastIncludedTerm
-		rf.snapshot = raftSnapshot
-		rf.mu.Unlock()
-		rf.logger.WithField("at", time.Now()).Info("persist: read persist ok")
+	if err := d.Decode(&term); err != nil {
+		rf.logger.WithError(err).Warn("persist: read persist failed")
+		return
 	}
+	if err := d.Decode(&votedFor); err != nil {
+		rf.logger.WithError(err).Warn("persist: read persist failed")
+		return
+	}
+	if err := d.Decode(&lastIncludedTerm); err != nil {
+		rf.logger.WithError(err).Warn("persist: read persist failed")
+		return
+	}
+	if err := d.Decode(&lastIncludedIndex); err != nil {
+		rf.logger.WithError(err).Warn("persist: read persist failed")
+		return
+	}
+	if err := d.Decode(&logs); err != nil {
+		rf.logger.WithError(err).Warn("persist: read persist failed")
+		return
+	}
+	rf.mu.Lock()
+	rf.currentTerm = term
+	rf.votedFor = votedFor
+	rf.log = logs
+	// 由于重启后直接读的snapshot，里面的lastincludedindex==commitindex==lastapplied
+	rf.lastIncludedIndex = lastIncludedIndex
+	rf.lastIncludedTerm = lastIncludedTerm
+	rf.lastApplied = lastIncludedIndex
+	rf.commitIndex = lastIncludedIndex
+	rf.snapshot = raftSnapshot
+	rf.mu.Unlock()
+	rf.logger.WithField("at", time.Now()).WithFields(logrus.Fields{
+		"currentTerm":       term,
+		"votedFor":          votedFor,
+		"logs":              logs,
+		"lastIncludedIndex": lastIncludedIndex,
+		"lastIncludedTerm":  lastIncludedTerm,
+	}).Info("persist: read persist ok")
 }

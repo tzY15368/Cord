@@ -27,6 +27,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.currentTerm = args.Term
 		rf.votedFor = -1
 		rf.logger.WithField("newTerm", rf.currentTerm).Info("appendEntry: became follower due to higher client term")
+		rf.dumpLog()
 	}
 
 	// confirm heartbeat to refresh timeout
@@ -66,7 +67,8 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			reply.Success = true
 			reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
 		} else {
-			if args.PrevLogIndex == rf.getBaseLogIndex() {
+			baseIndex := rf.getBaseLogIndex()
+			if args.PrevLogIndex == baseIndex {
 				// snapshot刚好接上
 				rf.log = append(rf.log, args.Entries...)
 				reply.Success = true
@@ -74,10 +76,15 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 				rf.dumpLog()
 				rf.logger.Info("appendEntry: append after snapshot successful")
 			} else {
-				reply.NextTryIndex = rf.getBaseLogIndex() + 1
-				rf.logger.WithField("nextTryIndex", reply.NextTryIndex).Info("appendEntry: append after snapshot failed")
+				reply.NextTryIndex = baseIndex + 1
+				rf.logger.WithFields(logrus.Fields{
+					"nextTryIndex":      reply.NextTryIndex,
+					"args.PrevLogIndex": args.PrevLogIndex,
+					"baseIndex":         baseIndex,
+				}).Error("appendEntry: append after snapshot failed")
 			}
 		}
+		rf.persist()
 
 		if args.LeaderCommit > rf.commitIndex {
 			if rf.getLastLogIndex() < args.LeaderCommit {
@@ -85,7 +92,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			} else {
 				rf.commitIndex = args.LeaderCommit
 			}
-			go rf.commitLog()
+			//go rf.commitLog()
+			rf.dumpLog()
+			rf.unsafeCommitLog()
 		}
 	}
 }
@@ -114,8 +123,10 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 		}
 	} else {
 		if !args.ExpectSnapshot {
-
+			rf.logger.WithField(fmt.Sprintf("nextTryIndex[%d]", server), reply.NextTryIndex).Debug("appendEntries: heartbeat returned")
 			rf.nextIndex[server] = reply.NextTryIndex
+		} else {
+			rf.logger.Debug("appendEntries: expected snapshot, doing nothing")
 		}
 	}
 
@@ -137,7 +148,8 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 		if count > len(rf.peers)/2 {
 			if rf.commitIndex < N {
 				rf.commitIndex = N
-				go rf.commitLog()
+				//go rf.commitLog()
+				rf.unsafeCommitLog()
 			}
 			break
 		}

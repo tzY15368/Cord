@@ -27,7 +27,6 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 		"index": index,
 	}).Info("snapshot: got snapshot")
 	rf.logger.Debug("snapshot: getting lock")
-	// 心跳超时也是因为他先block了leader的lock，导致leader的其他操作也拿不到lock，自然会超时
 	rf.mu.Lock()
 	//panic("got lock")
 	defer rf.mu.Unlock()
@@ -49,6 +48,13 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	if newIndex == 0 {
 		offset = 0
 	}
+	if offset < 0 {
+		rf.dumpLog()
+		rf.logger.WithFields(logrus.Fields{
+			"lastIncludedIindex": rf.lastIncludedIndex,
+		}).Warn("snapshot: offset < 0, doing absolute nothing")
+		return
+	}
 	lastIncludedEntry := rf.log[offset]
 
 	// handle snapshot
@@ -63,7 +69,7 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	}
 	rf.dumpLog()
 	rf.logger.WithFields(logrus.Fields{
-		"base": baseIndex, "len": newIndex,
+		"base": baseIndex, "len": newIndex, "lastIncludedIndex": lastIncludedEntry.Index,
 	}).Info("compacted logs")
 }
 
@@ -102,8 +108,6 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	rf.lastIncludedTerm = args.LastIncludedTerm
 
 	// todo: ignore leaderid for now
-	// persist after state change
-	rf.persist()
 
 	rf.applyMsgQueue.put(ApplyMsg{
 		CommandValid:  false,
@@ -115,6 +119,8 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	rf.log = make([]LogEntry, 0)
 	rf.dumpLog()
 	rf.logger.Info("installed snapshot")
+	// persist after state change
+	rf.persist()
 	// baseIndex和lastLogIndex
 	// baseindex是当前log的第一条，用于后面append确定index
 	// baseIndex应该就是lastincludedindex

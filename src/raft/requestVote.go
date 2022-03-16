@@ -1,5 +1,11 @@
 package raft
 
+import (
+	"fmt"
+
+	"github.com/sirupsen/logrus"
+)
+
 // isUPToDate not thread safe
 func (rf *Raft) isUpToDate(candidateTerm int, candidateIndex int) bool {
 	term, index := rf.getLastLogTerm(), rf.getLastLogIndex()
@@ -63,12 +69,20 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	reply.Term = rf.currentTerm
 	reply.VoteGranted = false
 
-	if (rf.votedFor == -1 || rf.votedFor == args.CandidateId) && rf.isUpToDate(args.LastLogTerm, args.LastLogIndex) {
+	logIsUpToDate := rf.isUpToDate(args.LastLogTerm, args.LastLogIndex)
+	if (rf.votedFor == -1 || rf.votedFor == args.CandidateId) && logIsUpToDate {
 		// vote for the candidate
 		rf.votedFor = args.CandidateId
 		reply.VoteGranted = true
 		rf.chanGrantVote <- true
 	}
+	rf.logger.WithFields(logrus.Fields{
+		"voteGranted":  reply.VoteGranted,
+		"votedFor":     rf.votedFor,
+		"args":         fmt.Sprintf("%+v", args),
+		"lastLogTerm":  rf.getLastLogTerm(),
+		"lastLogIndex": rf.getLastLogIndex(),
+	}).Debug("vote status")
 }
 
 func (rf *Raft) broadcastRequestVote() {
