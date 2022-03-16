@@ -70,6 +70,7 @@ func (rf *Raft) GetState() (int, bool) {
 	return term, isleader
 }
 
+// start returns index, term, isLeader
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	// Your code here (2B).
 	rf.mu.Lock()
