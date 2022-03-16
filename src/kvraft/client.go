@@ -72,6 +72,8 @@ Retry:
 			continue
 		case ErrNoKey:
 			return ""
+		case ErrUnexpected:
+			ck.logger.Panic("clerk: unexpected failure")
 		}
 	}
 	ck.logger.Warn("clerk: tried all servers, new round of retry")
@@ -113,6 +115,8 @@ Retry:
 			continue
 		case ErrNoKey:
 			return
+		case ErrUnexpected:
+			ck.logger.Panic("clerk: unexpected failure")
 		}
 	}
 	ck.logger.Warn("clerk: tried all servers")

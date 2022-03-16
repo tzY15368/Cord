@@ -4,6 +4,7 @@ const (
 	OK             = "OK"
 	ErrNoKey       = "ErrNoKey"
 	ErrWrongLeader = "ErrWrongLeader"
+	ErrUnexpected  = "ErrUnexpected"
 )
 
 type Err string
@@ -12,7 +13,7 @@ type Err string
 type PutAppendArgs struct {
 	Key   string
 	Value string
-	Op    string // "Put" or "Append"
+	Op    string // "PUT" or "APPEND"
 	// You'll have to add definitions here.
 	// Field names must start with capital letters,
 	// otherwise RPC will break.

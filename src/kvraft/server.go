@@ -1,12 +1,16 @@
 package kvraft
 
 import (
-	"6.824/labgob"
-	"6.824/labrpc"
-	"6.824/raft"
+	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
+
+	"6.824/labgob"
+	"6.824/labrpc"
+	"6.824/raft"
+	"github.com/sirupsen/logrus"
 )
 
 const Debug = false
@@ -18,11 +22,17 @@ func DPrintf(format string, a ...interface{}) (n int, err error) {
 	return
 }
 
-
 type Op struct {
 	// Your definitions here.
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
+
+	// GET/PUTAPPEND
+	OpType string
+	OpKey  string
+
+	// optional
+	OPValue string
 }
 
 type KVServer struct {
@@ -31,19 +41,77 @@ type KVServer struct {
 	rf      *raft.Raft
 	applyCh chan raft.ApplyMsg
 	dead    int32 // set by Kill()
+	logger  *logrus.Entry
 
 	maxraftstate int // snapshot if log grows this big
 
 	// Your definitions here.
-}
+	dataStore KVInterface
 
+	applyHandler *ApplyHandler
+}
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	// Your code here.
+
+	op := Op{
+		OpType: "GET",
+		OpKey:  args.Key,
+	}
+	index, _, isLeader := kv.rf.Start(op)
+	if !isLeader {
+		reply.Err = ErrWrongLeader
+		return
+	}
+	// 等applyChan实际拿到majority, may block indefinitely?
+	// 需要它内置超时
+	kv.applyHandler.waitForMajorityOnIndex(index)
+
+	// 实际向本地kvstore查数据
+	result, err := kv.dataStore.Get(op.OpKey)
+	if err != nil {
+		if errors.Is(err, ErrKeyNotFound) {
+			reply.Err = ErrNoKey
+		} else {
+			kv.logger.WithError(err).Error("kv: get: unexpected error")
+		}
+	}
+	reply.Value = result
+	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).Debug("kv: get: result")
 }
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	// Your code here.
+	op := Op{
+		OpType:  args.Op,
+		OpKey:   args.Key,
+		OPValue: args.Value,
+	}
+	index, _, isLeader := kv.rf.Start(op)
+	if !isLeader {
+		reply.Err = ErrWrongLeader
+		return
+	}
+	// 见Get
+	kv.applyHandler.waitForMajorityOnIndex(index)
+
+	// 实际向本地kvstore查数据
+	var err error
+	switch op.OpType {
+	case "PUT":
+		err = kv.dataStore.Put(op.OpKey, op.OPValue)
+	case "APPEND":
+		err = kv.dataStore.Append(op.OpKey, op.OPValue)
+	}
+
+	if err != nil {
+		if errors.Is(err, ErrKeyNotFound) {
+			reply.Err = ErrNoKey
+		} else {
+			kv.logger.WithError(err).Error("kv: putappend: unexpected error")
+		}
+	}
+	kv.logger.Debug("kv: putappend: ok")
 }
 
 //
@@ -89,13 +157,14 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv := new(KVServer)
 	kv.me = me
 	kv.maxraftstate = maxraftstate
-
+	kv.logger = logrus.WithField("id", kv.me)
 	// You may need initialization code here.
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 
 	// You may need initialization code here.
-
+	kv.dataStore = NewKVStore()
+	kv.applyHandler = NewApplyHandler()
 	return kv
 }
