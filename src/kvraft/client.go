@@ -74,6 +74,8 @@ Retry:
 			return ""
 		case ErrUnexpected:
 			ck.logger.Panic("clerk: unexpected failure")
+		case ErrTimeout:
+			ck.logger.WithField("serverid", leader+i).Panic("clerk: server timeout")
 		}
 	}
 	ck.logger.Warn("clerk: tried all servers, new round of retry")
@@ -117,6 +119,8 @@ Retry:
 			return
 		case ErrUnexpected:
 			ck.logger.Panic("clerk: unexpected failure")
+		case ErrTimeout:
+			ck.logger.WithField("serverid", leader+i).Panic("clerk: server timeout")
 		}
 	}
 	ck.logger.Warn("clerk: tried all servers")

@@ -65,7 +65,11 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	}
 	// 等applyChan实际拿到majority, may block indefinitely?
 	// 需要它内置超时
-	kv.applyHandler.waitForMajorityOnIndex(index)
+	ok := kv.applyHandler.waitForMajorityOnIndex(index)
+	if !ok {
+		reply.Err = ErrTimeout
+		return
+	}
 
 	// 实际向本地kvstore查数据
 	result, err := kv.dataStore.Get(op.OpKey)
@@ -165,6 +169,6 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 
 	// You may need initialization code here.
 	kv.dataStore = NewKVStore()
-	kv.applyHandler = NewApplyHandler()
+	kv.applyHandler = NewApplyHandler(kv.applyCh, len(servers))
 	return kv
 }
