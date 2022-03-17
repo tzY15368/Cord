@@ -39,7 +39,8 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 		"index": index, "commitIndex": rf.commitIndex, "baseIndex": baseIndex,
 	}
 	if index > rf.commitIndex {
-		rf.logger.WithFields(fields).Panic("snapshot: failed due to invalid index")
+		rf.logger.WithFields(fields).Warn("snapshot: failed due to invalid index")
+		return
 	} else {
 		rf.logger.WithFields(fields).Info("snapshot: params:")
 	}
