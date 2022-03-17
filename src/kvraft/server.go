@@ -9,6 +9,7 @@ import (
 
 	"6.824/labgob"
 	"6.824/labrpc"
+	"6.824/logging"
 	"6.824/raft"
 	"github.com/sirupsen/logrus"
 )
@@ -161,7 +162,8 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv := new(KVServer)
 	kv.me = me
 	kv.maxraftstate = maxraftstate
-	kv.logger = logrus.WithField("id", kv.me)
+	_logger := logging.GetLogger("kv", logrus.DebugLevel)
+	kv.logger = _logger.WithField("id", kv.me)
 	// You may need initialization code here.
 
 	kv.applyCh = make(chan raft.ApplyMsg)
@@ -169,6 +171,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 
 	// You may need initialization code here.
 	kv.dataStore = NewKVStore()
-	kv.applyHandler = NewApplyHandler(kv.applyCh, len(servers))
+	kv.applyHandler = NewApplyHandler(kv.applyCh, len(servers), _logger, me)
+	_logger.Panic("fail")
 	return kv
 }

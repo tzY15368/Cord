@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"6.824/raft"
+	"github.com/sirupsen/logrus"
 )
 
 func TestNewApplyHandler(t *testing.T) {
@@ -24,7 +25,7 @@ func TestNewApplyHandler(t *testing.T) {
 
 	t.Run("basic test", func(t *testing.T) {
 		log.Println("started", time.Now())
-		ah := NewApplyHandler(applyCh, 3)
+		ah := NewApplyHandler(applyCh, 3, logrus.New(), 666)
 		_ = ah
 		var wg = new(sync.WaitGroup)
 		for i := 1; i <= 3; i++ {

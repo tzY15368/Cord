@@ -31,13 +31,13 @@ type ApplyHandler struct {
 
 var ErrApplyTimeout = errors.New("error timeout")
 
-func NewApplyHandler(applyCh chan raft.ApplyMsg, peerCount int) *ApplyHandler {
+func NewApplyHandler(applyCh chan raft.ApplyMsg, peerCount int, logger *logrus.Logger, me int) *ApplyHandler {
 	ah := &ApplyHandler{
 		timeout:   10 * time.Second,
 		applyCh:   applyCh,
 		peerCount: peerCount,
 		applyMap:  make(map[int]*IndexListener),
-		logger:    logrus.WithField("applyHandler", ""),
+		logger:    logger.WithField("id", me),
 	}
 	go ah.handleApplies()
 	return ah
