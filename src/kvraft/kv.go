@@ -68,7 +68,7 @@ func (sk *SimpleKVStore) Append(key string, value string) error {
 	sk.mu.Lock()
 	defer sk.mu.Unlock()
 
-	// todo: 这里如果不存在key，应该报错还是依旧append？
+	// An Append to a non-existent key should act like Put
 	data, ok := sk.data[key]
 	if ok {
 		sk.data[key] = data + value
@@ -78,6 +78,7 @@ func (sk *SimpleKVStore) Append(key string, value string) error {
 		}).Debug("kvstore: append: diff")
 		return nil
 	} else {
-		return ErrKeyNotFound
+		sk.data[key] = value
+		return nil
 	}
 }
