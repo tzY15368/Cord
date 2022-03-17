@@ -1,7 +1,6 @@
 package kvraft
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -49,14 +48,14 @@ type KVServer struct {
 	// Your definitions here.
 	dataStore KVInterface
 
-	applyHandler *ApplyHandler
+	applychListener *ApplychListener
 }
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	// Your code here.
 
 	op := Op{
-		OpType: "GET",
+		OpType: OP_GET,
 		OpKey:  args.Key,
 	}
 	index, _, isLeader := kv.rf.Start(op)
@@ -66,7 +65,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	}
 	// 等applyChan实际拿到majority, may block indefinitely?
 	// 需要它内置超时
-	ok := kv.applyHandler.waitForMajorityOnIndex(index)
+	ok := kv.applychListener.waitForApplyOnIndex(index)
 	if !ok {
 		reply.Err = ErrTimeout
 		return
@@ -74,13 +73,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 
 	// 实际向本地kvstore查数据
 	result, err := kv.dataStore.Get(op.OpKey)
-	if err != nil {
-		if errors.Is(err, ErrKeyNotFound) {
-			reply.Err = ErrNoKey
-		} else {
-			kv.logger.WithError(err).Error("kv: get: unexpected error")
-		}
-	}
+	kv.dataStore.HandleError(err, reply, "kv: get: ")
 	reply.Value = result
 	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).Debug("kv: get: result")
 }
@@ -98,24 +91,21 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 		return
 	}
 	// 见Get
-	kv.applyHandler.waitForMajorityOnIndex(index)
+	ok := kv.applychListener.waitForApplyOnIndex(index)
+	if !ok {
+		reply.Err = ErrTimeout
+		return
+	}
 
-	// 实际向本地kvstore查数据
+	// 实际向本地kvstore写数据
 	var err error
 	switch op.OpType {
-	case "PUT":
+	case OP_PUT:
 		err = kv.dataStore.Put(op.OpKey, op.OPValue)
-	case "APPEND":
+	case OP_APPEND:
 		err = kv.dataStore.Append(op.OpKey, op.OPValue)
 	}
-
-	if err != nil {
-		if errors.Is(err, ErrKeyNotFound) {
-			reply.Err = ErrNoKey
-		} else {
-			kv.logger.WithError(err).Error("kv: putappend: unexpected error")
-		}
-	}
+	kv.dataStore.HandleError(err, reply, "kv: putappend: ")
 	kv.logger.Debug("kv: putappend: ok")
 }
 
@@ -170,8 +160,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 
 	// You may need initialization code here.
-	kv.dataStore = NewKVStore()
-	kv.applyHandler = NewApplyHandler(kv.applyCh, len(servers), _logger, me)
-	_logger.Panic("fail")
+	kv.dataStore = NewKVStore(logging.GetLogger("kvstore", logrus.DebugLevel).WithField("id", me))
+	kv.applychListener = NewApplyChListener(kv.applyCh, kv.logger, kv.dataStore, kv.rf)
 	return kv
 }
