@@ -64,6 +64,8 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			} else {
 				rf.log = append(rf.log, restLog...)
 			}
+			rf.dumpLog()
+			rf.logger.WithField("entries", args.Entries).Debug("appendEntry: appended logs")
 			reply.Success = true
 			reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
 		} else {

@@ -16,12 +16,15 @@ import (
 	"testing"
 	"time"
 
+	"6.824/logging"
 	"github.com/sirupsen/logrus"
 )
 
 // The tester generously allows solutions to complete elections in one second
 // (much more than the paper's range of timeouts).
 const RaftElectionTimeout = 1000 * time.Millisecond
+
+var logger = logging.GetLogger("raft", logrus.DebugLevel)
 
 func TestInitialElection2A(t *testing.T) {
 	servers := 3
@@ -1026,7 +1029,7 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 	leader1 := cfg.checkOneLeader()
 
 	for i := 0; i < iters; i++ {
-		logrus.Info("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+		logger.Info("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 		victim := (leader1 + 1) % servers
 		sender := leader1
 		if i%3 == 1 {
@@ -1036,12 +1039,12 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 
 		if disconnect {
 			cfg.disconnect(victim)
-			logrus.Info("--------disconnect---------", victim)
+			logger.Info("--------disconnect---------", victim)
 			cfg.one(rand.Int(), servers-1, true)
 		}
 		if crash {
 			cfg.crash1(victim)
-			logrus.Info("--------crash--------", victim)
+			logger.Info("--------crash--------", victim)
 			cfg.one(rand.Int(), servers-1, true)
 		}
 		// send enough to get a snapshot
@@ -1049,10 +1052,10 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 			cfg.rafts[sender].Start(rand.Int())
 		}
 		// let applier threads catch up with the Start()'s
-		logrus.Info("-------------catchup-------------")
+		logger.Info("-------------catchup-------------")
 		cfg.one(rand.Int(), servers-1, true)
 
-		logrus.Info("=============================")
+		logger.Info("=============================")
 		if cfg.LogSize() >= MAXLOGSIZE {
 			cfg.t.Fatalf("Log size too large")
 		}
@@ -1060,17 +1063,17 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 			// reconnect a follower, who maybe behind and
 			// needs to rceive a snapshot to catch up.
 			cfg.connect(victim)
-			logrus.Info("-=-=-=-=-=-=-=-=-=-=-=-=-")
+			logger.Info("-=-=-=-=-=-=-=-=-=-=-=-=-")
 			cfg.one(rand.Int(), servers, true)
-			logrus.Info("___________disconnectone__________")
+			logger.Info("___________disconnectone__________")
 			leader1 = cfg.checkOneLeader()
 		}
 		if crash {
 			cfg.start1(victim, cfg.applierSnap)
 			cfg.connect(victim)
-			logrus.Info("-=-=-=-=-= reboot -=-=-=-=-=-", victim)
+			logger.Info("-=-=-=-=-= reboot -=-=-=-=-=-", victim)
 			cfg.one(rand.Int(), servers, true)
-			logrus.Info("_______________crashone__________")
+			logger.Info("_______________crashone__________")
 			leader1 = cfg.checkOneLeader()
 		}
 	}
