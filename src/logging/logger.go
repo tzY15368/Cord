@@ -29,7 +29,7 @@ func GetLogger(name string, level logrus.Level) *logrus.Logger {
 	}
 
 	logger := logrus.New()
-	if level < logrus.WarnLevel {
+	if level < logrus.InfoLevel {
 
 		fileAndStdoutWriter := io.MultiWriter(logFile, os.Stdout)
 		writer := ansicolor.NewAnsiColorWriter(fileAndStdoutWriter)
