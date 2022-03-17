@@ -2,17 +2,20 @@ package kvraft
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"sync/atomic"
+	"time"
 
 	"6.824/labrpc"
+	"6.824/logging"
 	"github.com/sirupsen/logrus"
 )
 
 type Clerk struct {
 	servers []*labrpc.ClientEnd
 	// You will have to modify this struct.
-	logger *logrus.Entry
+	logger *logrus.Logger
 	leader int32
 }
 
@@ -34,7 +37,7 @@ func nrand() int64 {
 func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
-	ck.logger = logrus.WithField("clerk", "clerk")
+	ck.logger = logging.GetLogger("kv", logrus.DebugLevel)
 	// starts with leader = 0 by default
 	ck.leader = 0
 	// You'll have to add code here.
@@ -56,31 +59,40 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 func (ck *Clerk) Get(key string) string {
 	args := &GetArgs{Key: key}
 	reply := &GetReply{}
-Retry:
 	leader := ck.getLeader()
-	i := 0
-	defer ck.setLeader((leader + i) % len(ck.servers))
-	for ok := ck.servers[leader+i].Call("KVServer.PutAppend", args, reply); i < len(ck.servers); i++ {
+	for i := 0; true; i++ {
+		_leaderID := (leader + i) % len(ck.servers)
+		ck.logger.WithField("target", _leaderID).Info("clerk: send get")
+		ok := ck.servers[_leaderID].Call("KVServer.Get", args, reply)
 		if !ok {
-			ck.logger.WithField("id", leader).Warn("clerk: get: unreachable kvserver")
+			ck.logger.WithField("id", leader).Warn("clerk: get: unreachable kvserver, incrmenting")
 			continue
 		}
-		switch reply.Err {
-		case OK:
+		ck.logger.WithFields(logrus.Fields{
+			"id":    _leaderID,
+			"args":  fmt.Sprintf("%+v", args),
+			"reply": fmt.Sprintf("%+v", reply),
+		}).Info("got reply")
+		switch {
+		case reply.Err == OK:
+			ck.setLeader(_leaderID)
 			return reply.Value
-		case ErrWrongLeader:
-			continue
-		case ErrNoKey:
+		case reply.Err == ErrWrongLeader:
+			ck.logger.Debug("wrong leader")
+		case reply.Err == ErrNoKey:
+			ck.setLeader(_leaderID)
 			return ""
-		case ErrUnexpected:
-			ck.logger.Panic("clerk: unexpected failure")
-		case ErrTimeout:
-			ck.logger.WithField("serverid", leader+i).Panic("clerk: server timeout")
+		case reply.Err == ErrUnexpected:
+			ck.logger.WithField("leader", _leaderID).Panic("err unexpected")
+		case reply.Err == ErrTimeout:
+			ck.logger.WithField("leader", _leaderID).Panic("no agreement")
+		}
+		if i != 0 && i%len(ck.servers) == 0 {
+			ck.logger.Warn("no leaders found, waiting 500ms")
+			time.Sleep(500 * time.Millisecond)
 		}
 	}
-	ck.logger.Warn("clerk: tried all servers, new round of retry")
-	goto Retry
-	// You will have to modify this function.
+	return ""
 }
 
 //
@@ -101,35 +113,44 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		Op:    op,
 	}
 	reply := &PutAppendReply{}
-Retry:
 	leader := ck.getLeader()
-	i := 0
-	defer ck.setLeader((leader + i) % len(ck.servers))
-	for ok := ck.servers[leader+i].Call("KVServer.PutAppend", args, reply); i < len(ck.servers); i++ {
+	for i := 0; true; i++ {
+		_leaderID := (leader + i) % len(ck.servers)
+		ck.logger.WithField("target", _leaderID).Info("clerk: send putappend")
+		ok := ck.servers[_leaderID].Call("KVServer.PutAppend", args, reply)
 		if !ok {
 			ck.logger.WithField("id", leader).Warn("clerk: get: unreachable kvserver, incrmenting")
 			continue
 		}
-		switch reply.Err {
-		case OK:
+		ck.logger.WithFields(logrus.Fields{
+			"id":    _leaderID,
+			"args":  fmt.Sprintf("%+v", args),
+			"reply": fmt.Sprintf("%+v", reply),
+		}).Info("got reply")
+		switch {
+		case reply.Err == OK:
+			ck.setLeader(_leaderID)
 			return
-		case ErrWrongLeader:
-			continue
-		case ErrNoKey:
+		case reply.Err == ErrWrongLeader:
+			ck.logger.Debug("wrong leader")
+		case reply.Err == ErrNoKey:
+			ck.setLeader(_leaderID)
 			return
-		case ErrUnexpected:
-			ck.logger.Panic("clerk: unexpected failure")
-		case ErrTimeout:
-			ck.logger.WithField("serverid", leader+i).Panic("clerk: server timeout")
+		case reply.Err == ErrUnexpected:
+			ck.logger.WithField("leader", _leaderID).Panic("err unexpected")
+		case reply.Err == ErrTimeout:
+			ck.logger.WithField("leader", _leaderID).Panic("no agreement")
+		}
+		if i != 0 && i%len(ck.servers) == 0 {
+			ck.logger.Warn("no leaders found, waiting 500ms")
+			time.Sleep(500 * time.Millisecond)
 		}
 	}
-	ck.logger.Warn("clerk: tried all servers")
-	goto Retry
 }
 
 func (ck *Clerk) Put(key string, value string) {
-	ck.PutAppend(key, value, "Put")
+	ck.PutAppend(key, value, "PUT")
 }
 func (ck *Clerk) Append(key string, value string) {
-	ck.PutAppend(key, value, "Append")
+	ck.PutAppend(key, value, "APPEND")
 }
