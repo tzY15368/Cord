@@ -1,10 +1,10 @@
 package kvraft
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
+	"6.824/common"
 	"6.824/raft"
 	"github.com/sirupsen/logrus"
 )
@@ -12,7 +12,7 @@ import (
 type ApplychListener struct {
 	target    chan raft.ApplyMsg
 	mu        sync.Mutex
-	readyMap  map[int]chan struct{}
+	readyMap  map[int]chan OPResult
 	logger    *logrus.Entry
 	timeout   time.Duration
 	dataStore KVInterface
@@ -22,9 +22,9 @@ type ApplychListener struct {
 func NewApplyChListener(target chan raft.ApplyMsg, logger *logrus.Entry, dataStore KVInterface, rf *raft.Raft) *ApplychListener {
 	al := &ApplychListener{
 		target:    target,
-		readyMap:  make(map[int]chan struct{}),
+		readyMap:  make(map[int]chan OPResult),
 		logger:    logger,
-		timeout:   10 * time.Second,
+		timeout:   common.ApplyCHTimeout,
 		dataStore: dataStore,
 		rf:        rf,
 	}
@@ -33,7 +33,7 @@ func NewApplyChListener(target chan raft.ApplyMsg, logger *logrus.Entry, dataSto
 	return al
 }
 
-func (al *ApplychListener) getReadyChanOnIndex(index int) chan struct{} {
+func (al *ApplychListener) getReadyChanOnIndex(index int) chan OPResult {
 	al.mu.Lock()
 	defer al.mu.Unlock()
 	c, ok := al.readyMap[index]
@@ -41,7 +41,7 @@ func (al *ApplychListener) getReadyChanOnIndex(index int) chan struct{} {
 		return c
 	}
 	al.logger.WithField("index", index).Debug("apply: new listener on index")
-	al.readyMap[index] = make(chan struct{}, 1)
+	al.readyMap[index] = make(chan OPResult, 1)
 	return al.readyMap[index]
 }
 func (al *ApplychListener) dropIndex(index int) {
@@ -53,26 +53,15 @@ func (al *ApplychListener) dropIndex(index int) {
 func (al *ApplychListener) handleApplies() {
 	for msg := range al.target {
 		if msg.CommandValid {
-			al.logger.WithField("msg", msg).Debug("apply: got msg")
+			//al.logger.WithField("msg", msg).Debug("apply: got msg")
 			readyChan := al.getReadyChanOnIndex(msg.CommandIndex)
-			_, isLeader := al.rf.GetState()
-			if isLeader {
-				readyChan <- struct{}{}
-			} else {
-				al.dropIndex(msg.CommandIndex)
-				op := msg.Command.(Op)
-				var err error
-				switch op.OpType {
-				case OP_APPEND:
-					err = al.dataStore.Append(op.OpKey, op.OPValue)
-				case OP_GET:
-					_, err = al.dataStore.Get(op.OpKey)
-				case OP_PUT:
-					err = al.dataStore.Put(op.OpKey, op.OPValue)
-				}
-				al.dataStore.HandleError(err, nil, "apply: follower: "+op.OpType)
-				al.logger.WithField("op", fmt.Sprintf("%+v", op)).Debug("apply: follower: applyok")
+			select {
+			case <-readyChan: // drain bad data
+			default:
 			}
+			op := msg.Command.(Op)
+			opResult := al.dataStore.EvalOp(op)
+			readyChan <- opResult
 
 		} else {
 			al.logger.Warn("apply: command not valid")
@@ -80,15 +69,17 @@ func (al *ApplychListener) handleApplies() {
 	}
 }
 
-func (al *ApplychListener) waitForApplyOnIndex(index int) bool {
+func (al *ApplychListener) waitForApplyOnIndex(index int) OPResult {
 	readyc := al.getReadyChanOnIndex(index)
 	select {
 	case <-time.After(al.timeout):
 		al.logger.WithField("index", index).Warn("apply: wait timeout on index")
-		return false
-	case <-readyc:
+		return OPResult{
+			err: ErrTimeout,
+		}
+	case result := <-readyc:
 		al.dropIndex(index)
 		al.logger.WithField("index", index).Debug("apply: wait ok on index")
-		return true
+		return result
 	}
 }

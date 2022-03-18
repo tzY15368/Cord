@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"6.824/common"
 	"6.824/labgob"
 	"6.824/labrpc"
 	"6.824/logging"
@@ -33,6 +34,8 @@ type Op struct {
 
 	// optional
 	OPValue string
+
+	RequestInfo
 }
 
 type KVServer struct {
@@ -51,62 +54,48 @@ type KVServer struct {
 	applychListener *ApplychListener
 }
 
+// propose command to raft
+func (kv *KVServer) proposeAndApply(op Op, replier ReplyInterface) string {
+	index, _, isLeader := kv.rf.Start(op)
+	if !isLeader {
+		replier.SetReplyErr(ErrWrongLeader)
+		return ""
+	}
+	kv.logger.WithField("index", index).Debug("propose: start is ok")
+	opResult := kv.applychListener.waitForApplyOnIndex(index)
+	replier.SetReplyErr(opResult.err)
+	kv.logger.WithField("index", index).Debug("propose: apply is done")
+	return opResult.data
+}
+
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	// Your code here.
 
 	op := Op{
-		OpType: OP_GET,
-		OpKey:  args.Key,
-	}
-	index, _, isLeader := kv.rf.Start(op)
-	if !isLeader {
-		reply.Err = ErrWrongLeader
-		return
-	}
-	// 等applyChan实际拿到majority, may block indefinitely?
-	// 需要它内置超时
-	ok := kv.applychListener.waitForApplyOnIndex(index)
-	if !ok {
-		reply.Err = ErrTimeout
-		return
+		OpType:      OP_GET,
+		OpKey:       args.Key,
+		RequestInfo: args.RequestInfo,
 	}
 
-	// 实际向本地kvstore查数据
-	result, err := kv.dataStore.Get(op.OpKey)
-	kv.dataStore.HandleError(err, reply, "kv: get: ")
+	result := kv.proposeAndApply(op, reply)
 	reply.Value = result
-	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).Debug("kv: get: result")
+
+	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).
+		Debug(fmt.Sprintf("kv: %s: result", op.OpType))
 }
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	// Your code here.
 	op := Op{
-		OpType:  args.Op,
-		OpKey:   args.Key,
-		OPValue: args.Value,
+		OpType:      args.Op,
+		OpKey:       args.Key,
+		OPValue:     args.Value,
+		RequestInfo: args.RequestInfo,
 	}
-	index, _, isLeader := kv.rf.Start(op)
-	if !isLeader {
-		reply.Err = ErrWrongLeader
-		return
-	}
-	// 见Get
-	ok := kv.applychListener.waitForApplyOnIndex(index)
-	if !ok {
-		reply.Err = ErrTimeout
-		return
-	}
-
-	// 实际向本地kvstore写数据
-	var err error
-	switch op.OpType {
-	case OP_PUT:
-		err = kv.dataStore.Put(op.OpKey, op.OPValue)
-	case OP_APPEND:
-		err = kv.dataStore.Append(op.OpKey, op.OPValue)
-	}
-	kv.dataStore.HandleError(err, reply, "kv: putappend: ")
-	kv.logger.Debug("kv: putappend: ok")
+	kv.proposeAndApply(op, reply)
+	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).
+		Debug(fmt.Sprintf("kv: %s: result", op.OpType))
+	reply.RV = 123
 }
 
 //
@@ -130,20 +119,12 @@ func (kv *KVServer) killed() bool {
 	return z == 1
 }
 
-//
-// servers[] contains the ports of the set of
-// servers that will cooperate via Raft to
-// form the fault-tolerant key/value service.
-// me is the index of the current server in servers[].
 // the k/v server should store snapshots through the underlying Raft
 // implementation, which should call persister.SaveStateAndSnapshot() to
 // atomically save the Raft state along with the snapshot.
 // the k/v server should snapshot when Raft's saved state exceeds maxraftstate bytes,
 // in order to allow Raft to garbage-collect its log. if maxraftstate is -1,
 // you don't need to snapshot.
-// StartKVServer() must return quickly, so it should start goroutines
-// for any long-running work.
-//
 func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister, maxraftstate int) *KVServer {
 	// call labgob.Register on structures you want
 	// Go's RPC library to marshall/unmarshall.
@@ -152,7 +133,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv := new(KVServer)
 	kv.me = me
 	kv.maxraftstate = maxraftstate
-	_logger := logging.GetLogger("kv", logrus.DebugLevel)
+	_logger := logging.GetLogger("kv", common.KVServerLogLevel)
 	kv.logger = _logger.WithField("id", kv.me)
 	// You may need initialization code here.
 
@@ -160,7 +141,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 
 	// You may need initialization code here.
-	kv.dataStore = NewKVStore(logging.GetLogger("kvstore", logrus.DebugLevel).WithField("id", me))
+	kv.dataStore = NewKVStore(logging.GetLogger("kvstore", common.KVStoreLogLevel).WithField("id", me))
 	kv.applychListener = NewApplyChListener(kv.applyCh, kv.logger, kv.dataStore, kv.rf)
 	return kv
 }

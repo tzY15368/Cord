@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"math/big"
 	"sync/atomic"
-	"time"
 
+	"6.824/common"
 	"6.824/labrpc"
 	"6.824/logging"
 	"github.com/sirupsen/logrus"
@@ -15,8 +15,10 @@ import (
 type Clerk struct {
 	servers []*labrpc.ClientEnd
 	// You will have to modify this struct.
-	logger *logrus.Logger
-	leader int32
+	logger    *logrus.Logger
+	leader    int32
+	clientID  int64
+	requestID int64
 }
 
 func (ck *Clerk) getLeader() int {
@@ -37,9 +39,11 @@ func nrand() int64 {
 func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
-	ck.logger = logging.GetLogger("kv", logrus.DebugLevel)
+	ck.logger = logging.GetLogger("kv", common.KVServerLogLevel)
 	// starts with leader = 0 by default
 	ck.leader = 0
+	ck.requestID = 0
+	ck.clientID = nrand()
 	// You'll have to add code here.
 	return ck
 }
@@ -57,7 +61,13 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 // arguments. and reply must be passed as a pointer.
 //
 func (ck *Clerk) Get(key string) string {
-	args := &GetArgs{Key: key}
+	args := &GetArgs{
+		Key: key,
+		RequestInfo: RequestInfo{
+			ClientID:  ck.clientID,
+			RequestID: atomic.AddInt64(&ck.requestID, 1),
+		},
+	}
 	reply := &GetReply{}
 	leader := ck.getLeader()
 	for i := 0; true; i++ {
@@ -74,22 +84,20 @@ func (ck *Clerk) Get(key string) string {
 			"reply": fmt.Sprintf("%+v", reply),
 		}).Info("got reply")
 		switch {
-		case reply.Err == OK:
+		case string(reply.Err) == ErrOK.Error():
 			ck.setLeader(_leaderID)
 			return reply.Value
-		case reply.Err == ErrWrongLeader:
+		case string(reply.Err) == ErrWrongLeader.Error():
 			ck.logger.Debug("wrong leader")
-		case reply.Err == ErrNoKey:
+		case string(reply.Err) == ErrKeyNotFound.Error():
 			ck.setLeader(_leaderID)
 			return ""
-		case reply.Err == ErrUnexpected:
+		case string(reply.Err) == ErrUnexpected.Error():
 			ck.logger.WithField("leader", _leaderID).Panic("err unexpected")
-		case reply.Err == ErrTimeout:
-			ck.logger.WithField("leader", _leaderID).Panic("no agreement")
-		}
-		if i != 0 && i%len(ck.servers) == 0 {
-			ck.logger.Warn("no leaders found, waiting 500ms")
-			time.Sleep(500 * time.Millisecond)
+		case string(reply.Err) == ErrTimeout.Error():
+			ck.logger.WithField("leader", _leaderID).Warn("no agreement")
+		default:
+			ck.logger.Panic("default")
 		}
 	}
 	return ""
@@ -111,6 +119,10 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		Key:   key,
 		Value: value,
 		Op:    op,
+		RequestInfo: RequestInfo{
+			ClientID:  ck.clientID,
+			RequestID: atomic.AddInt64(&ck.requestID, 1),
+		},
 	}
 	reply := &PutAppendReply{}
 	leader := ck.getLeader()
@@ -128,23 +140,23 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 			"reply": fmt.Sprintf("%+v", reply),
 		}).Info("got reply")
 		switch {
-		case reply.Err == OK:
+		case string(reply.Err) == ErrOK.Error():
 			ck.setLeader(_leaderID)
 			return
-		case reply.Err == ErrWrongLeader:
+		case string(reply.Err) == ErrWrongLeader.Error():
 			ck.logger.Debug("wrong leader")
-		case reply.Err == ErrNoKey:
-			ck.setLeader(_leaderID)
+		case string(reply.Err) == ErrKeyNotFound.Error():
+			ck.logger.Panic("invalid reply: errrkeynotfound")
+			// this should never happen for putappend
 			return
-		case reply.Err == ErrUnexpected:
+		case string(reply.Err) == ErrUnexpected.Error():
 			ck.logger.WithField("leader", _leaderID).Panic("err unexpected")
-		case reply.Err == ErrTimeout:
-			ck.logger.WithField("leader", _leaderID).Panic("no agreement")
+		case string(reply.Err) == ErrTimeout.Error():
+			ck.logger.WithField("leader", _leaderID).Warn("no agreement")
+		default:
+			ck.logger.Panic("default")
 		}
-		if i != 0 && i%len(ck.servers) == 0 {
-			ck.logger.Warn("no leaders found, waiting 500ms")
-			time.Sleep(500 * time.Millisecond)
-		}
+		ck.logger.Debug("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	}
 }
 
