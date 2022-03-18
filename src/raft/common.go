@@ -4,7 +4,7 @@ import "time"
 
 const (
 	electionTimeout  = time.Millisecond * 300
-	hearbeatInterval = time.Millisecond * 150
+	hearbeatInterval = time.Millisecond * 100
 )
 
 func (rf *Raft) panicHandler() {
