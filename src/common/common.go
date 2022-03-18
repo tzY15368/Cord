@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	RaftLogLevel     = logrus.WarnLevel
-	KVServerLogLevel = logrus.WarnLevel
-	KVStoreLogLevel  = logrus.WarnLevel
+	RaftLogLevel     = logrus.InfoLevel
+	KVServerLogLevel = logrus.DebugLevel
+	KVStoreLogLevel  = logrus.InfoLevel
 )
 const (
 	ApplyCHTimeout = 15 * time.Second

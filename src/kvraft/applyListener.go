@@ -54,6 +54,7 @@ func (al *ApplychListener) handleApplies() {
 	for msg := range al.target {
 		if msg.CommandValid {
 			//al.logger.WithField("msg", msg).Debug("apply: got msg")
+			start := time.Now()
 			readyChan := al.getReadyChanOnIndex(msg.CommandIndex)
 			select {
 			case <-readyChan: // drain bad data
@@ -62,6 +63,9 @@ func (al *ApplychListener) handleApplies() {
 			op := msg.Command.(Op)
 			opResult := al.dataStore.EvalOp(op)
 			readyChan <- opResult
+			al.logger.WithField("time", time.Since(start)).WithFields(logrus.Fields{
+				"op": op.OpKey,
+			}).Debug("evalOp: time took")
 
 		} else {
 			al.logger.Warn("apply: command not valid")
@@ -70,6 +74,8 @@ func (al *ApplychListener) handleApplies() {
 }
 
 func (al *ApplychListener) waitForApplyOnIndex(index int) OPResult {
+	start := time.Now()
+	defer al.logger.WithField("time", time.Since(start)).Info("apply: waitFor took")
 	readyc := al.getReadyChanOnIndex(index)
 	select {
 	case <-time.After(al.timeout):

@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"6.824/common"
 	"6.824/labrpc"
 	"6.824/logging"
 	"github.com/sirupsen/logrus"
@@ -185,7 +186,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.nextIndex = make([]int, len(rf.peers))
 	rf.matchIndex = make([]int, len(rf.peers))
 
-	_logger := logging.GetLogger("raft", logrus.DebugLevel)
+	_logger := logging.GetLogger("raft", common.RaftLogLevel)
 
 	rf.logger = _logger.WithField("id", rf.me)
 	rf.applyMsgQueue = NewQueue(rf.chanApply)

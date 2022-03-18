@@ -56,6 +56,7 @@ type KVServer struct {
 
 // propose command to raft
 func (kv *KVServer) proposeAndApply(op Op, replier ReplyInterface) string {
+
 	index, _, isLeader := kv.rf.Start(op)
 	if !isLeader {
 		replier.SetReplyErr(ErrWrongLeader)

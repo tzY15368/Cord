@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync/atomic"
+	"time"
 
 	"6.824/common"
 	"6.824/labrpc"
@@ -99,6 +100,11 @@ func (ck *Clerk) Get(key string) string {
 		default:
 			ck.logger.Panic("default")
 		}
+
+		if i != 0 && i%len(ck.servers) != 0 {
+			ck.logger.Debug("clerk: no leaders, sleeping 500ms")
+			time.Sleep(500 * time.Millisecond)
+		}
 	}
 	return ""
 }
@@ -114,6 +120,7 @@ func (ck *Clerk) Get(key string) string {
 // arguments. and reply must be passed as a pointer.
 //
 func (ck *Clerk) PutAppend(key string, value string, op string) {
+	start := time.Now()
 	// You will have to modify this function.
 	args := &PutAppendArgs{
 		Key:   key,
@@ -142,6 +149,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		switch {
 		case string(reply.Err) == ErrOK.Error():
 			ck.setLeader(_leaderID)
+			ck.logger.WithField("time", time.Since(start)).Debug("clerk: putappend took time")
 			return
 		case string(reply.Err) == ErrWrongLeader.Error():
 			ck.logger.Debug("wrong leader")
@@ -156,8 +164,12 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		default:
 			ck.logger.Panic("default")
 		}
-		ck.logger.Debug("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+		if i != 0 && i%len(ck.servers) != 0 {
+			ck.logger.Debug("clerk: no leaders, sleeping 500ms")
+			time.Sleep(500 * time.Millisecond)
+		}
 	}
+
 }
 
 func (ck *Clerk) Put(key string, value string) {

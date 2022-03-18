@@ -1,9 +1,12 @@
 package kvraft
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"os"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
@@ -419,12 +422,34 @@ func GenericTestSpeed(t *testing.T, part string, maxraftstate int) {
 	cfg.end()
 }
 
+var doProfile = flag.String("prof", "", "write prof to file")
+
 func TestBasic3A(t *testing.T) {
 	// Test: one client (3A) ...
+
+	if *doProfile != "" {
+		f, err := os.Create(*doProfile)
+		if err != nil {
+			panic(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 	GenericTest(t, "3A", 1, 5, false, false, false, -1, false)
 }
 
 func TestSpeed3A(t *testing.T) {
+	if *doProfile != "" {
+		f, err := os.Create(*doProfile)
+		if err != nil {
+			panic(err)
+		}
+		go func() {
+			time.Sleep(30 * time.Second)
+			pprof.StartCPUProfile(f)
+		}()
+		defer pprof.StopCPUProfile()
+	}
 	GenericTestSpeed(t, "3A", -1)
 }
 
