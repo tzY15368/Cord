@@ -185,7 +185,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.nextIndex = make([]int, len(rf.peers))
 	rf.matchIndex = make([]int, len(rf.peers))
 
-	_logger := logging.GetLogger("raft", logrus.InfoLevel)
+	_logger := logging.GetLogger("raft", logrus.DebugLevel)
 
 	rf.logger = _logger.WithField("id", rf.me)
 	rf.applyMsgQueue = NewQueue(rf.chanApply)

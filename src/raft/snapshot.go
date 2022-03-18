@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -128,7 +129,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	// lastlogindex是当前实例已有的最后一条，也是lastincludedindex
 }
 
-// 如果appendentries发现对方nextindex过低，发snapshot,并阻塞??
+// 如果appendentries发现对方nextindex过低，发snapshot
 func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply *InstallSnapshotReply) bool {
 	if args.LastIncludedIndex*args.LastIncludedTerm == 0 {
 		rf.logger.WithFields(logrus.Fields{
@@ -136,6 +137,7 @@ func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply
 			"lastincludedterm":  rf.lastIncludedTerm,
 		}).Panic("snapshot: invalid last included")
 	}
+	rf.logger.WithField("args", fmt.Sprintf("%+v", args)).Debug("snapshot: args:")
 	ok := rf.peers[server].Call("Raft.InstallSnapshot", args, reply)
 	rf.mu.Lock()
 	defer rf.logger.WithField("at", time.Now()).Info("sendinstallsnapshot successful")
@@ -153,6 +155,8 @@ func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply
 		rf.nextIndex[server] = args.LastIncludedIndex + 1
 		rf.matchIndex[server] = rf.nextIndex[server] - 1
 		rf.logger.WithField("nextindex", rf.nextIndex[server]).Info("snapshot: result")
+	} else {
+		rf.logger.Warn("snapshot: net fail")
 	}
 	return ok
 }
