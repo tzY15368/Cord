@@ -19,11 +19,18 @@ func (rf *Raft) hasConflictLog(leaderLog []LogEntry, localLog []LogEntry) bool {
 
 // dumpLog not thread safe
 func (rf *Raft) dumpLog() {
+	var logSlice []LogEntry
+	if len(rf.log) > 10 {
+		logSlice = rf.log[len(rf.log)-4:]
+	} else {
+		logSlice = rf.log
+	}
 	rf.logger.WithFields(logrus.Fields{
+		"actualLength":      len(rf.log),
 		"lastApplied":       rf.lastApplied,
 		"commitIndex":       rf.commitIndex,
 		"lastIncludedIndex": rf.lastIncludedIndex,
-	}).Debugf("log: %+v", rf.log)
+	}).Debugf("log: %+v", logSlice)
 }
 
 func (rf *Raft) commitLog() {
