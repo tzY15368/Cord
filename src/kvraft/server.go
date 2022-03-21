@@ -5,6 +5,7 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"6.824/common"
 	"6.824/labgob"
@@ -49,9 +50,50 @@ type KVServer struct {
 	maxraftstate int // snapshot if log grows this big
 
 	// Your definitions here.
-	dataStore KVInterface
-
+	dataStore       KVInterface
+	notify          map[int]chan OPResult
 	applychListener *ApplychListener
+}
+
+func (kv *KVServer) applyEntry(index int) OPResult {
+	kv.mu.Lock()
+	ch, ok := kv.notify[index]
+	if !ok {
+		ch = make(chan OPResult, 1)
+		kv.notify[index] = ch
+	}
+	kv.mu.Unlock()
+
+	select {
+	case result := <-ch:
+		return result
+	case <-time.After(common.ApplyCHTimeout):
+		return OPResult{err: ErrTimeout}
+	}
+}
+
+func (kv *KVServer) applyMsgHandler() {
+	for msg := range kv.applyCh {
+		if msg.CommandValid {
+			op := msg.Command.(Op)
+			opResult := kv.dataStore.EvalOp(op)
+			kv.mu.Lock()
+			ch, ok := kv.notify[msg.CommandIndex]
+			if ok {
+				select {
+				case <-ch: // drain bad data
+				default:
+				}
+			} else {
+				ch = make(chan OPResult, 1)
+				kv.notify[msg.CommandIndex] = ch
+			}
+			ch <- opResult
+			kv.mu.Unlock()
+		} else {
+			kv.logger.Warn("apply:command not valid")
+		}
+	}
 }
 
 // propose command to raft
@@ -60,13 +102,63 @@ func (kv *KVServer) proposeAndApply(op Op, replier ReplyInterface) string {
 	index, _, isLeader := kv.rf.Start(op)
 	if !isLeader {
 		replier.SetReplyErr(ErrWrongLeader)
+		kv.logger.WithField("op", op).Debug("early return: not leader")
 		return ""
 	}
 	kv.logger.WithField("index", index).Debug("propose: start is ok")
-	opResult := kv.applychListener.waitForApplyOnIndex(index)
-	replier.SetReplyErr(opResult.err)
+	doneChan := make(chan OPResult, 1)
+	lostLeaderChan := make(chan struct{}, 1)
+	var opEndResult OPResult
+	go func() {
+		// opResult := kv.applychListener.waitForApplyOnIndex(index)
+		opResult := kv.applyEntry(index)
+		if !opResult.requestInfo.equals(&op.RequestInfo) {
+			lostLeaderChan <- struct{}{}
+			kv.logger.WithField("index", index).Warn("propose: different content on index")
+		} else {
+
+			// 这里需要额外检查op确实是提交的op
+			doneChan <- opResult
+			term, state := kv.rf.GetState()
+			kv.logger.WithFields(logrus.Fields{
+				"opResult": opResult,
+				"op":       op,
+				"term":     term,
+				"state":    state,
+				"index":    index,
+			}).Debug("got opresult")
+		}
+	}()
+	var run int32 = 1
+	go func() {
+		for atomic.LoadInt32(&run) == 1 {
+			_, isLeader := kv.rf.GetState()
+			if !isLeader {
+				kv.logger.Warn("kv: lost leadership")
+				lostLeaderChan <- struct{}{}
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		// kv.rf.LeaderStepDown.L.Lock()
+		// for _, isLeader := kv.rf.GetState(); isLeader; {
+		// 	kv.logger.Debug("kv: waiting for leader state")
+		// 	kv.rf.LeaderStepDown.Wait()
+		// }
+		// kv.rf.LeaderStepDown.L.Unlock()
+		// lostLeaderChan <- struct{}{}
+		// kv.logger.Warn("kv: lost leadership")
+	}()
+	select {
+	case opEndResult = <-doneChan:
+		atomic.StoreInt32(&run, 0)
+		break
+	case <-lostLeaderChan:
+		opEndResult.err = ErrWrongLeader
+	}
+	replier.SetReplyErr(opEndResult.err)
 	kv.logger.WithField("index", index).Debug("propose: apply is done")
-	return opResult.data
+	return opEndResult.data
 }
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
@@ -143,6 +235,9 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 
 	// You may need initialization code here.
 	kv.dataStore = NewKVStore(logging.GetLogger("kvstore", common.KVStoreLogLevel).WithField("id", me))
-	kv.applychListener = NewApplyChListener(kv.applyCh, kv.logger, kv.dataStore, kv.rf)
+	//kv.applychListener = NewApplyChListener(kv.applyCh, kv.logger, kv.dataStore, kv.rf)
+
+	kv.notify = make(map[int]chan OPResult)
+	go kv.applyMsgHandler()
 	return kv
 }

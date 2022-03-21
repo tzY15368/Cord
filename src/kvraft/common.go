@@ -17,13 +17,18 @@ const (
 )
 
 type OPResult struct {
-	data string
-	err  error
+	data        string
+	err         error
+	requestInfo RequestInfo
 }
 
 type RequestInfo struct {
 	ClientID  int64
 	RequestID int64
+}
+
+func (ri1 *RequestInfo) equals(ri2 *RequestInfo) bool {
+	return ri1.ClientID == ri2.ClientID && ri1.RequestID == ri2.RequestID
 }
 
 // Put or Append

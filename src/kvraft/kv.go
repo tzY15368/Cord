@@ -40,12 +40,15 @@ func (sk *SimpleKVStore) isDuplicate(request RequestInfo) bool {
 func (sk *SimpleKVStore) EvalOp(op Op) OPResult {
 	sk.mu.Lock()
 	defer sk.mu.Unlock()
+	opRes := OPResult{
+		err:         nil,
+		requestInfo: op.RequestInfo,
+	}
 	if sk.isDuplicate(op.RequestInfo) {
-		res := OPResult{}
 		if op.OpType == OP_GET {
-			res.data = sk.data[op.OpKey]
+			opRes.data = sk.data[op.OpKey]
 		}
-		return res
+		return opRes
 	}
 
 	// register in ack
@@ -55,19 +58,16 @@ func (sk *SimpleKVStore) EvalOp(op Op) OPResult {
 	case OP_GET:
 		data, ok := sk.data[op.OpKey]
 		if ok {
-			return OPResult{
-				data: data,
-				err:  nil,
-			}
+			opRes.data = data
+			return opRes
 		} else {
-			return OPResult{
-				err: ErrKeyNotFound,
-			}
+			opRes.err = ErrKeyNotFound
+			return opRes
 		}
 	case OP_PUT:
 		sk.data[op.OpKey] = op.OPValue
 	case OP_APPEND:
 		sk.data[op.OpKey] += op.OPValue
 	}
-	return OPResult{}
+	return opRes
 }
