@@ -24,7 +24,7 @@ import (
 // (much more than the paper's range of timeouts).
 const RaftElectionTimeout = 1000 * time.Millisecond
 
-var logger = logging.GetLogger("raft", logrus.DebugLevel)
+var logger = logging.GetLogger("raft", logrus.InfoLevel)
 
 func TestInitialElection2A(t *testing.T) {
 	servers := 3

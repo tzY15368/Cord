@@ -70,36 +70,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.log = append(rf.log, args.Entries...)
 		reply.Success = true
 		reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
-		// if len(rf.log) != 0 {
-		// 	var restLog []LogEntry
-		// 	rf.log, restLog = rf.log[:args.PrevLogIndex-baseIndex+1], rf.log[args.PrevLogIndex-baseIndex+1:]
-		// 	if rf.hasConflictLog(restLog, args.Entries) || len(restLog) < len(args.Entries) {
-		// 		rf.log = append(rf.log, args.Entries...)
-		// 	} else {
-		// 		rf.log = append(rf.log, restLog...)
-		// 	}
-		// 	rf.dumpLog()
-		// 	rf.logger.WithField("entries", args.Entries).Debug("appendEntry: appended logs")
-		// 	reply.Success = true
-		// 	reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
-		// } else {
-		// 	baseIndex := rf.getBaseLogIndex()
-		// 	if args.PrevLogIndex == baseIndex {
-		// 		// snapshot刚好接上
-		// 		rf.log = append(rf.log, args.Entries...)
-		// 		reply.Success = true
-		// 		reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
-		// 		rf.dumpLog()
-		// 		rf.logger.Info("appendEntry: append after snapshot successful")
-		// 	} else {
-		// 		reply.NextTryIndex = baseIndex + 1
-		// 		rf.logger.WithFields(logrus.Fields{
-		// 			"nextTryIndex":      reply.NextTryIndex,
-		// 			"args.PrevLogIndex": args.PrevLogIndex,
-		// 			"baseIndex":         baseIndex,
-		// 		}).Error("appendEntry: append after snapshot failed")
-		// 	}
-		// }
 		rf.persist()
 
 		if args.LeaderCommit > rf.commitIndex {

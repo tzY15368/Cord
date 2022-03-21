@@ -27,20 +27,17 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 		"raw":   len(snapshot),
 		"index": index,
 	}).Info("snapshot: got snapshot")
-	rf.logger.Debug("snapshot: getting lock")
 	rf.mu.Lock()
-	//panic("got lock")
 	defer rf.mu.Unlock()
 	defer rf.persist()
 	rf.dumpLog()
 	// commitIndex始终小于等于maxIndex，所以不用担心
 	baseIndex := rf.getBaseLogIndex()
-	// baseIndex := rf.log[0].Index
 	fields := logrus.Fields{
 		"index": index, "commitIndex": rf.commitIndex, "baseIndex": baseIndex,
 	}
 	if index > rf.commitIndex {
-		rf.logger.WithFields(fields).Warn("snapshot: failed due to invalid index")
+		rf.logger.WithFields(fields).Warn("snapshot: failed due to invalid index, index > rf.commitIndex")
 		return
 	} else {
 		rf.logger.WithFields(fields).Info("snapshot: params:")
@@ -66,9 +63,7 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 
 	// log compaction
 	rf.log = rf.log[newIndex:]
-	if len(rf.log) == 0 {
-		rf.logger.Panic("snapshot: must have at least 1 elem in log")
-	}
+
 	rf.dumpLog()
 	rf.logger.WithFields(logrus.Fields{
 		"base": baseIndex, "len": newIndex, "lastIncludedIndex": lastIncludedEntry.Index,
@@ -80,7 +75,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	defer rf.mu.Unlock()
 	// 同步log，然后把snapshot里的状态发给applychan
 	rf.logger.Info("snapshot: installing snapshot")
-	//	baseIndex := rf.log[0].Index
+
 	baseIndex := rf.getBaseLogIndex()
 	if args.Term < rf.currentTerm {
 		reply.Term = rf.currentTerm
@@ -94,6 +89,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		rf.logger.WithField("newTerm", rf.currentTerm).
 			Info("snapshot: became follower due to higher client term")
 	}
+
 	reply.Term = rf.currentTerm
 	if args.LastIncludedIndex <= baseIndex {
 		rf.logger.WithFields(logrus.Fields{
@@ -146,10 +142,11 @@ func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply
 	if ok {
 		// sendinstallsnapshot需要在返回后处理nextindex【server】的变化
 		if reply.Term > rf.currentTerm {
-			rf.logger.WithFields(logrus.Fields{
-				"reply.term":  reply.Term,
-				"currentTerm": rf.currentTerm,
-			}).Warn("snapshot: reply.term > term, waiting for appendentry to handle")
+			rf.state = STATE_FOLLOWER
+			rf.currentTerm = reply.Term
+			rf.votedFor = -1
+			rf.logger.WithField("newTerm", rf.currentTerm).
+				Info("snapshot: became follower due to higher client term")
 			return false
 		}
 		rf.nextIndex[server] = args.LastIncludedIndex + 1
