@@ -14,8 +14,10 @@ import (
 	"testing"
 	"time"
 
+	"6.824/logging"
 	"6.824/models"
 	"6.824/porcupine"
+	"github.com/sirupsen/logrus"
 )
 
 // The tester generously allows solutions to complete elections in one second
@@ -499,6 +501,8 @@ func TestUnreliableOneKey3A(t *testing.T) {
 // doesn't go through until the partition heals.  The leader in the original
 // network ends up in the minority partition.
 func TestOnePartition3A(t *testing.T) {
+	logger := logging.GetLogger("raft", logrus.InfoLevel)
+	loggerkv := logging.GetLogger("kv", logrus.DebugLevel)
 	const nservers = 5
 	cfg := make_config(t, nservers, false, -1)
 	defer cfg.cleanup()
@@ -548,7 +552,8 @@ func TestOnePartition3A(t *testing.T) {
 	cfg.end()
 
 	cfg.begin("Test: completion after heal (3A)")
-
+	logger.Warn("----------- reconnect -----------")
+	loggerkv.Warn("------------ reconnect ------------")
 	cfg.ConnectAll()
 	cfg.ConnectClient(ckp2a, cfg.All())
 	cfg.ConnectClient(ckp2b, cfg.All())

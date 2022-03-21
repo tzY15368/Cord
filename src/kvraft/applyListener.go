@@ -53,7 +53,7 @@ func (al *ApplychListener) dropIndex(index int) {
 func (al *ApplychListener) handleApplies() {
 	for msg := range al.target {
 		if msg.CommandValid {
-			//al.logger.WithField("msg", msg).Debug("apply: got msg")
+			al.logger.WithField("msg", msg).Debug("apply: got msg")
 			start := time.Now()
 			readyChan := al.getReadyChanOnIndex(msg.CommandIndex)
 			select {
