@@ -48,13 +48,12 @@ type RequestVoteReply struct {
 	VoteGranted bool
 }
 type AppendEntriesArgs struct {
-	Term           int
-	LeaderId       int
-	PrevLogIndex   int
-	PrevLogTerm    int
-	Entries        []LogEntry
-	LeaderCommit   int
-	ExpectSnapshot bool
+	Term         int
+	LeaderId     int
+	PrevLogIndex int
+	PrevLogTerm  int
+	Entries      []LogEntry
+	LeaderCommit int
 }
 
 type AppendEntriesReply struct {

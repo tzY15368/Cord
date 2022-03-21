@@ -56,36 +56,50 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	} else if args.PrevLogIndex >= baseIndex-1 {
 		// otherwise log up to prevLogIndex are safe.
 		// we can merge lcoal log and entries from leader, and apply log if commitIndex changes.
-		if len(rf.log) != 0 {
-			var restLog []LogEntry
-			rf.log, restLog = rf.log[:args.PrevLogIndex-baseIndex+1], rf.log[args.PrevLogIndex-baseIndex+1:]
-			if rf.hasConflictLog(restLog, args.Entries) || len(restLog) < len(args.Entries) {
-				rf.log = append(rf.log, args.Entries...)
-			} else {
-				rf.log = append(rf.log, restLog...)
-			}
-			rf.dumpLog()
-			rf.logger.WithField("entries", args.Entries).Debug("appendEntry: appended logs")
-			reply.Success = true
-			reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
-		} else {
-			baseIndex := rf.getBaseLogIndex()
-			if args.PrevLogIndex == baseIndex {
-				// snapshot刚好接上
-				rf.log = append(rf.log, args.Entries...)
-				reply.Success = true
-				reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
-				rf.dumpLog()
-				rf.logger.Info("appendEntry: append after snapshot successful")
-			} else {
-				reply.NextTryIndex = baseIndex + 1
+		if len(rf.log) > 0 {
+			rightMargin := args.PrevLogIndex - baseIndex + 1
+			if rightMargin > len(rf.log) {
 				rf.logger.WithFields(logrus.Fields{
-					"nextTryIndex":      reply.NextTryIndex,
-					"args.PrevLogIndex": args.PrevLogIndex,
-					"baseIndex":         baseIndex,
-				}).Error("appendEntry: append after snapshot failed")
+					"rightMargin": rightMargin,
+					"lenLog":      len(rf.log),
+				}).Panic("appendEntry: invalid right margin")
 			}
+			rf.log = rf.log[:rightMargin]
 		}
+
+		rf.log = append(rf.log, args.Entries...)
+		reply.Success = true
+		reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
+		// if len(rf.log) != 0 {
+		// 	var restLog []LogEntry
+		// 	rf.log, restLog = rf.log[:args.PrevLogIndex-baseIndex+1], rf.log[args.PrevLogIndex-baseIndex+1:]
+		// 	if rf.hasConflictLog(restLog, args.Entries) || len(restLog) < len(args.Entries) {
+		// 		rf.log = append(rf.log, args.Entries...)
+		// 	} else {
+		// 		rf.log = append(rf.log, restLog...)
+		// 	}
+		// 	rf.dumpLog()
+		// 	rf.logger.WithField("entries", args.Entries).Debug("appendEntry: appended logs")
+		// 	reply.Success = true
+		// 	reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
+		// } else {
+		// 	baseIndex := rf.getBaseLogIndex()
+		// 	if args.PrevLogIndex == baseIndex {
+		// 		// snapshot刚好接上
+		// 		rf.log = append(rf.log, args.Entries...)
+		// 		reply.Success = true
+		// 		reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
+		// 		rf.dumpLog()
+		// 		rf.logger.Info("appendEntry: append after snapshot successful")
+		// 	} else {
+		// 		reply.NextTryIndex = baseIndex + 1
+		// 		rf.logger.WithFields(logrus.Fields{
+		// 			"nextTryIndex":      reply.NextTryIndex,
+		// 			"args.PrevLogIndex": args.PrevLogIndex,
+		// 			"baseIndex":         baseIndex,
+		// 		}).Error("appendEntry: append after snapshot failed")
+		// 	}
+		// }
 		rf.persist()
 
 		if args.LeaderCommit > rf.commitIndex {
@@ -116,6 +130,8 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 		rf.state = STATE_FOLLOWER
 		rf.votedFor = -1
 		//rf.persist()
+		rf.logger.WithField("newTerm", rf.currentTerm).
+			Info("appendEntry: leader became follower due to higher client term")
 		return ok
 	}
 	if reply.Success {
@@ -124,12 +140,7 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 			rf.matchIndex[server] = rf.nextIndex[server] - 1
 		}
 	} else {
-		if !args.ExpectSnapshot {
-			rf.logger.WithField(fmt.Sprintf("nextTryIndex[%d]", server), reply.NextTryIndex).Debug("appendEntries: heartbeat returned")
-			rf.nextIndex[server] = reply.NextTryIndex
-		} else {
-			rf.logger.Debug("appendEntries: expected snapshot, doing nothing")
-		}
+		rf.nextIndex[server] = reply.NextTryIndex
 	}
 
 	baseIndex := rf.getBaseLogIndex()
@@ -207,7 +218,7 @@ func (rf *Raft) broadcastAppendEntries() {
 					}
 
 					go rf.sendInstallSnapshot(server, snapshotArgs, &InstallSnapshotReply{})
-					args.ExpectSnapshot = true
+					//args.ExpectSnapshot = true
 					rf.logger.Warn(fmt.Sprintf("broadcast: nextindex[%d] < baseIndex, sending snapshot instead", server))
 					args.Entries = make([]LogEntry, 0)
 				} else {

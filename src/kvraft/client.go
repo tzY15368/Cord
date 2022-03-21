@@ -83,13 +83,13 @@ func (ck *Clerk) Get(key string) string {
 			"id":    _leaderID,
 			"args":  fmt.Sprintf("%+v", args),
 			"reply": fmt.Sprintf("%+v", reply),
-		}).Info("got reply")
+		}).Info("clerk: GET: got reply")
 		switch {
 		case string(reply.Err) == ErrOK.Error():
 			ck.setLeader(_leaderID)
 			return reply.Value
 		case string(reply.Err) == ErrWrongLeader.Error():
-			ck.logger.Debug("wrong leader")
+			ck.logger.Debug("clerk: wrong leader")
 		case string(reply.Err) == ErrKeyNotFound.Error():
 			ck.setLeader(_leaderID)
 			return ""
@@ -101,10 +101,10 @@ func (ck *Clerk) Get(key string) string {
 			ck.logger.Panic("default")
 		}
 
-		if i != 0 && i%len(ck.servers) != 0 {
-			ck.logger.Debug("clerk: no leaders, sleeping 500ms")
-			time.Sleep(500 * time.Millisecond)
-		}
+		// if i != 0 && i%len(ck.servers) != 0 {
+		// 	ck.logger.Debug("clerk: no leaders, sleeping 500ms")
+		// 	time.Sleep(500 * time.Millisecond)
+		// }
 	}
 	return ""
 }
@@ -135,7 +135,11 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 	leader := ck.getLeader()
 	for i := 0; true; i++ {
 		_leaderID := (leader + i) % len(ck.servers)
-		ck.logger.WithField("target", _leaderID).Info("clerk: send putappend")
+		ck.logger.WithFields(logrus.Fields{
+			"target": _leaderID,
+			"key":    key,
+			"value":  value,
+		}).Info("clerk: send putappend")
 		ok := ck.servers[_leaderID].Call("KVServer.PutAppend", args, reply)
 		if !ok {
 			ck.logger.WithField("id", leader).Warn("clerk: get: unreachable kvserver, incrmenting")
@@ -145,14 +149,14 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 			"id":    _leaderID,
 			"args":  fmt.Sprintf("%+v", args),
 			"reply": fmt.Sprintf("%+v", reply),
-		}).Info("got reply")
+		}).Info("clerk: PUTAPPEND: got reply")
 		switch {
 		case string(reply.Err) == ErrOK.Error():
 			ck.setLeader(_leaderID)
 			ck.logger.WithField("time", time.Since(start)).Debug("clerk: putappend took time")
 			return
 		case string(reply.Err) == ErrWrongLeader.Error():
-			ck.logger.Debug("wrong leader")
+			ck.logger.Debug("clerk: wrong leader")
 		case string(reply.Err) == ErrKeyNotFound.Error():
 			ck.logger.Panic("invalid reply: errrkeynotfound")
 			// this should never happen for putappend
@@ -164,10 +168,10 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		default:
 			ck.logger.Panic("default")
 		}
-		if i != 0 && i%len(ck.servers) != 0 {
-			ck.logger.Debug("clerk: no leaders, sleeping 500ms")
-			time.Sleep(500 * time.Millisecond)
-		}
+		// if i != 0 && i%len(ck.servers) != 0 {
+		// 	ck.logger.Debug("clerk: no leaders, sleeping 500ms")
+		// 	time.Sleep(500 * time.Millisecond)
+		// }
 	}
 
 }
