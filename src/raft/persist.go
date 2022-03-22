@@ -79,6 +79,16 @@ func (rf *Raft) readPersist() {
 	rf.lastApplied = lastIncludedIndex
 	rf.commitIndex = lastIncludedIndex
 	rf.snapshot = raftSnapshot
+	if rf.lastIncludedIndex > 0 {
+		msg := ApplyMsg{
+			CommandValid:  false,
+			SnapshotValid: true,
+			Snapshot:      rf.snapshot,
+			SnapshotTerm:  rf.lastIncludedTerm,
+			SnapshotIndex: rf.lastIncludedIndex,
+		}
+		rf.applyMsgQueue.put(msg)
+	}
 	rf.mu.Unlock()
 	rf.logger.WithField("at", time.Now()).WithFields(logrus.Fields{
 		"currentTerm":       term,

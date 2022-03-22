@@ -48,11 +48,12 @@ type KVServer struct {
 	logger  *logrus.Entry
 
 	maxraftstate int // snapshot if log grows this big
+	inSnapshot   int32
 
 	// Your definitions here.
-	dataStore       KVInterface
-	notify          map[int]chan OPResult
-	applychListener *ApplychListener
+	dataStore KVInterface
+	notify    map[int]chan OPResult
+	// applychListener *ApplychListener
 }
 
 func (kv *KVServer) applyEntry(index int) OPResult {
@@ -76,7 +77,15 @@ func (kv *KVServer) applyMsgHandler() {
 	for msg := range kv.applyCh {
 		if msg.CommandValid {
 			op := msg.Command.(Op)
-			opResult := kv.dataStore.EvalOp(op)
+			shouldSnapshot := kv.shouldIssueSnapshot()
+			opResult, dumpData := kv.dataStore.EvalOp(op, shouldSnapshot)
+			if shouldSnapshot {
+				go func(index int, data []byte) {
+					atomic.StoreInt32(&kv.inSnapshot, 1)
+					kv.rf.Snapshot(index, data)
+					atomic.StoreInt32(&kv.inSnapshot, 0)
+				}(msg.CommandIndex, dumpData)
+			}
 			kv.mu.Lock()
 			ch, ok := kv.notify[msg.CommandIndex]
 			if ok {
@@ -88,10 +97,16 @@ func (kv *KVServer) applyMsgHandler() {
 				ch = make(chan OPResult, 1)
 				kv.notify[msg.CommandIndex] = ch
 			}
-			ch <- opResult
 			kv.mu.Unlock()
+			ch <- opResult
+		} else if msg.SnapshotValid {
+			kv.logger.Warn("apply: applying snapshot")
+			err := kv.dataStore.Load(msg.Snapshot)
+			if err != nil {
+				kv.logger.Panic("apply: load snapshot error", err)
+			}
 		} else {
-			kv.logger.Warn("apply:command not valid")
+			kv.logger.Panic("apply: invalid command", msg)
 		}
 	}
 }
@@ -140,14 +155,6 @@ func (kv *KVServer) proposeAndApply(op Op, replier ReplyInterface) string {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		// kv.rf.LeaderStepDown.L.Lock()
-		// for _, isLeader := kv.rf.GetState(); isLeader; {
-		// 	kv.logger.Debug("kv: waiting for leader state")
-		// 	kv.rf.LeaderStepDown.Wait()
-		// }
-		// kv.rf.LeaderStepDown.L.Unlock()
-		// lostLeaderChan <- struct{}{}
-		// kv.logger.Warn("kv: lost leadership")
 	}()
 	select {
 	case opEndResult = <-doneChan:
@@ -210,6 +217,22 @@ func (kv *KVServer) Kill() {
 func (kv *KVServer) killed() bool {
 	z := atomic.LoadInt32(&kv.dead)
 	return z == 1
+}
+
+func (kv *KVServer) shouldIssueSnapshot() bool {
+	if kv.maxraftstate == -1 || atomic.LoadInt32(&kv.inSnapshot) == 1 {
+		return false
+	}
+	rfSize := kv.rf.GetStateSize()
+	if kv.maxraftstate-rfSize < common.StateSizeDiff {
+
+		kv.logger.WithFields(logrus.Fields{
+			"raftStateSize": rfSize,
+			"maxraftState":  kv.maxraftstate,
+		}).Debug("kv: should issue snapshot")
+		return true
+	}
+	return false
 }
 
 // the k/v server should store snapshots through the underlying Raft

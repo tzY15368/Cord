@@ -72,6 +72,11 @@ func (rf *Raft) GetState() (int, bool) {
 	return term, isleader
 }
 
+func (rf *Raft) GetStateSize() int {
+	size := rf.persister.RaftStateSize()
+	return size
+}
+
 // start returns index, term, isLeader
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	// Your code here (2B).

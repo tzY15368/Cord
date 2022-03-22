@@ -13,6 +13,7 @@ const (
 )
 const (
 	ApplyCHTimeout = 15 * time.Second
+	StateSizeDiff  = 30
 )
 
 func Min(i int, j int) int {

@@ -8,6 +8,7 @@ var (
 	ErrWrongLeader = errors.New("ErrWrongLeader")
 	ErrUnexpected  = errors.New("ErrUnexpected")
 	ErrTimeout     = errors.New("ErrTimeout")
+	ErrDumpFail    = errors.New("ErrDumpFail")
 )
 
 const (
