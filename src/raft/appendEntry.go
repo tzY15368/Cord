@@ -2,7 +2,9 @@ package raft
 
 import (
 	"fmt"
+	"time"
 
+	"6.824/common"
 	"github.com/sirupsen/logrus"
 )
 
@@ -50,8 +52,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		// we can bypass all entries during the problematic term to speed up.
 		rf.logger.WithField("args", fmt.Sprintf("%+v", args)).WithField("logterm", rf.getLogTermAtOffset(args.PrevLogIndex-baseIndex)).Info("cond failed")
 		term := rf.getLogTermAtOffset(args.PrevLogIndex - baseIndex)
-		for i := args.PrevLogIndex - 1; i >= baseIndex && rf.getLogTermAtOffset(i-baseIndex) == term; i-- {
-			reply.NextTryIndex = i + 1
+		for i := args.PrevLogIndex - 1; i >= baseIndex; i-- {
+			if rf.getLogTermAtOffset(i-baseIndex) != term {
+				reply.NextTryIndex = i + 1
+				break
+			}
 		}
 	} else if args.PrevLogIndex >= baseIndex-1 {
 		// otherwise log up to prevLogIndex are safe.
@@ -65,6 +70,12 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 				}).Panic("appendEntry: invalid right margin")
 			}
 			rf.log = rf.log[:rightMargin]
+		} else {
+			// 之前是个snapshot，baseindex应该完全等于args.prevlogindex
+			rf.logger.WithFields(logrus.Fields{
+				"baseIndex":         baseIndex,
+				"args.PrevLogIndex": args.PrevLogIndex,
+			}).Warn("appendEntry: was snapshot")
 		}
 
 		rf.log = append(rf.log, args.Entries...)
@@ -110,7 +121,7 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 			rf.matchIndex[server] = rf.nextIndex[server] - 1
 		}
 	} else {
-		rf.nextIndex[server] = reply.NextTryIndex
+		rf.nextIndex[server] = common.Min(reply.NextTryIndex, rf.getLastLogIndex())
 	}
 
 	baseIndex := rf.getBaseLogIndex()
@@ -164,9 +175,11 @@ func (rf *Raft) broadcastAppendEntries() {
 			} else {
 				args.PrevLogTerm = rf.lastIncludedTerm
 			}
-			if rf.nextIndex[server] <= rf.getLastLogIndex() {
+			lastLogIndex := rf.getLastLogIndex()
+			if rf.nextIndex[server] <= lastLogIndex {
 				rf.logger.WithFields(logrus.Fields{
 					fmt.Sprintf("nextindex[%d]", server): rf.nextIndex[server],
+					"lastLogIndex":                       lastLogIndex,
 					"baseIndex":                          baseIndex,
 				}).Debug("broadcast: entries diff:")
 				if rf.nextIndex[server] < baseIndex {
@@ -189,8 +202,13 @@ func (rf *Raft) broadcastAppendEntries() {
 
 					go rf.sendInstallSnapshot(server, snapshotArgs, &InstallSnapshotReply{})
 					//args.ExpectSnapshot = true
-					rf.logger.Warn(fmt.Sprintf("broadcast: nextindex[%d] < baseIndex, sending snapshot instead", server))
-					args.Entries = make([]LogEntry, 0)
+					rf.logger.WithFields(logrus.Fields{
+						"at":                                 time.Now(),
+						fmt.Sprintf("nextIndex[%d]", server): rf.nextIndex[server],
+						"baseIndex":                          baseIndex,
+						"lastIncludedIndex":                  rf.lastIncludedIndex,
+					}).Warn(fmt.Sprintf("broadcast: nextindex[%d] < baseIndex, sending snapshot instead", server))
+					return
 				} else {
 					args.Entries = rf.log[rf.nextIndex[server]-baseIndex:]
 				}

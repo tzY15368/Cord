@@ -24,7 +24,7 @@ import (
 // (much more than the paper's range of timeouts).
 const RaftElectionTimeout = 1000 * time.Millisecond
 
-var logger = logging.GetLogger("raft", logrus.InfoLevel)
+var logger = logging.GetLogger("raft", logrus.DebugLevel)
 
 func TestInitialElection2A(t *testing.T) {
 	servers := 3
@@ -1030,6 +1030,10 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 
 	for i := 0; i < iters; i++ {
 		logger.Info("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+		// for _, rf := range cfg.rafts {
+		// 	rf.SafeDumpLogFields().Info("dump log")
+		// }
+		logger.Info("____________________________________")
 		victim := (leader1 + 1) % servers
 		sender := leader1
 		if i%3 == 1 {
@@ -1053,6 +1057,9 @@ func snapcommon(t *testing.T, name string, disconnect bool, reliable bool, crash
 		}
 		// let applier threads catch up with the Start()'s
 		logger.Info("-------------catchup-------------")
+		// for _, rf := range cfg.rafts {
+		// 	rf.SafeDumpLogFields().Info("dump log")
+		// }
 		cfg.one(rand.Int(), servers-1, true)
 
 		logger.Info("=============================")

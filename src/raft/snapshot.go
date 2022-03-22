@@ -1,9 +1,12 @@
 package raft
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
+	"6.824/common"
+	"6.824/labgob"
 	"github.com/sirupsen/logrus"
 )
 
@@ -23,14 +26,12 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// 拿到的是已经snapshot完，序列化完的状态,在2d里就是一个int，
 	// 存在本地持久状态里，遇到过于落后的follower发出去即可
 
-	rf.logger.WithFields(logrus.Fields{
-		"raw":   len(snapshot),
-		"index": index,
-	}).Info("snapshot: got snapshot")
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	defer rf.persist()
-	rf.dumpLog()
+	rf.logger.WithFields(logrus.Fields{
+		"index": index,
+	}).Info("snapshot: got snapshot")
 	// commitIndex始终小于等于maxIndex，所以不用担心
 	baseIndex := rf.getBaseLogIndex()
 	fields := logrus.Fields{
@@ -48,12 +49,12 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 		offset = 0
 	}
 	if offset < 0 {
-		rf.dumpLog()
 		rf.logger.WithFields(logrus.Fields{
 			"lastIncludedIindex": rf.lastIncludedIndex,
 		}).Warn("snapshot: offset < 0, doing absolute nothing")
 		return
 	}
+	rf.dumpLogFields().Debug("snapshot: before compaction:")
 	lastIncludedEntry := rf.log[offset]
 
 	// handle snapshot
@@ -64,10 +65,9 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// log compaction
 	rf.log = rf.log[newIndex:]
 
-	rf.dumpLog()
-	rf.logger.WithFields(logrus.Fields{
+	rf.dumpLogFields().WithFields(logrus.Fields{
 		"base": baseIndex, "len": newIndex, "lastIncludedIndex": lastIncludedEntry.Index,
-	}).Info("compacted logs")
+	}).Debug("snapshot: after compaction")
 }
 
 func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) {
@@ -89,7 +89,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		rf.logger.WithField("newTerm", rf.currentTerm).
 			Info("snapshot: became follower due to higher client term")
 	}
-
+	rf.chanHeartbeat <- true
 	reply.Term = rf.currentTerm
 	if args.LastIncludedIndex <= baseIndex {
 		rf.logger.WithFields(logrus.Fields{
@@ -104,21 +104,25 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	rf.currentTerm = args.Term
 	rf.lastIncludedIndex = args.LastIncludedIndex
 	rf.lastIncludedTerm = args.LastIncludedTerm
-
+	rf.log = make([]LogEntry, 0)
+	rf.dumpLogFields().Debug("snapshot: log truncated")
 	// todo: ignore leaderid for now
-
-	rf.applyMsgQueue.put(ApplyMsg{
+	msg := ApplyMsg{
 		CommandValid:  false,
 		SnapshotValid: true,
 		Snapshot:      args.Data,
 		SnapshotTerm:  args.Term,
-		SnapshotIndex: args.LastIncludedIndex,
-	})
-	rf.log = make([]LogEntry, 0)
-	rf.dumpLog()
-	rf.logger.Info("installed snapshot")
+		SnapshotIndex: args.LastIncludedIndex + 1,
+	}
+	decoder := labgob.NewDecoder(bytes.NewBuffer(msg.Snapshot))
+	var val int
+	decoder.Decode(&val)
+	rf.logger.WithField("msg", msg).WithField("cmd", val).Debug("snapshot: snapshot msg")
+	rf.applyMsgQueue.put(msg)
+
 	// persist after state change
 	rf.persist()
+	rf.logger.Info("installed snapshot")
 	// baseIndex和lastLogIndex
 	// baseindex是当前log的第一条，用于后面append确定index
 	// baseIndex应该就是lastincludedindex
@@ -149,7 +153,7 @@ func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply
 				Info("snapshot: became follower due to higher client term")
 			return false
 		}
-		rf.nextIndex[server] = args.LastIncludedIndex + 1
+		rf.nextIndex[server] = common.Max(args.LastIncludedIndex+1, rf.nextIndex[server])
 		rf.matchIndex[server] = rf.nextIndex[server] - 1
 		rf.logger.WithField("nextindex", rf.nextIndex[server]).Info("snapshot: result")
 	} else {

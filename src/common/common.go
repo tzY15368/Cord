@@ -17,6 +17,13 @@ const (
 
 func Min(i int, j int) int {
 	if i > j {
+		return j
+	}
+	return i
+}
+
+func Max(i int, j int) int {
+	if i > j {
 		return i
 	}
 	return j

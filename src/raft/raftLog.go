@@ -1,6 +1,10 @@
 package raft
 
-import "github.com/sirupsen/logrus"
+import (
+	"fmt"
+
+	"github.com/sirupsen/logrus"
+)
 
 type LogEntry struct {
 	Term    int
@@ -33,6 +37,29 @@ func (rf *Raft) dumpLog() {
 	}).Debugf("log: %+v", logSlice)
 }
 
+func (rf *Raft) dumpLogFields() *logrus.Entry {
+	logString := ""
+	if len(rf.log) > 3 {
+		logString += fmt.Sprintf("%+v", rf.log[0])
+		logString += "..."
+		logString += fmt.Sprintf("%+v", rf.log[len(rf.log)-2:])
+	} else {
+		logString = fmt.Sprintf("%+v", rf.log)
+	}
+	return rf.logger.WithFields(logrus.Fields{
+		"lastIncludedIndex": rf.lastIncludedIndex,
+		"actualLen":         len(rf.log),
+		"log":               logString,
+	})
+}
+
+func (rf *Raft) SafeDumpLogFields() *logrus.Entry {
+	rf.mu.Lock()
+
+	defer rf.mu.Unlock()
+	return rf.dumpLogFields()
+}
+
 func (rf *Raft) commitLog() {
 	rf.mu.Lock()
 	//	baseIndex := rf.log[0].Index
@@ -48,6 +75,7 @@ func (rf *Raft) unsafeCommitLog() {
 			CommandIndex: i,
 			Command:      rf.log[i-baseIndex].Command,
 		}
+		rf.logger.WithField("msg", msg).Debug("commit: msg=")
 		rf.applyMsgQueue.put(msg)
 		// rf.chanApply <- msg
 	}

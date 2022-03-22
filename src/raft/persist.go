@@ -30,9 +30,9 @@ func (rf *Raft) persist() {
 	e2.Encode(rf.log)
 
 	rf.persister.SaveStateAndSnapshot(w.Bytes(), rf.snapshot)
-	rf.logger.WithFields(logrus.Fields{
-		"lastIncludedIndex": rf.lastIncludedIndex,
-	}).Debug("save persist ok")
+	// rf.logger.WithFields(logrus.Fields{
+	// 	"lastIncludedIndex": rf.lastIncludedIndex,
+	// }).Debug("save persist ok")
 	// .WithField("at", time.Now())
 }
 
