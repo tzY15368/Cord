@@ -64,7 +64,7 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 func (ck *Clerk) Get(key string) string {
 	args := &GetArgs{
 		Key: key,
-		RequestInfo: RequestInfo{
+		RequestInfo: common.RequestInfo{
 			ClientID:  ck.clientID,
 			RequestID: atomic.AddInt64(&ck.requestID, 1),
 		},
@@ -126,7 +126,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		Key:   key,
 		Value: value,
 		Op:    op,
-		RequestInfo: RequestInfo{
+		RequestInfo: common.RequestInfo{
 			ClientID:  ck.clientID,
 			RequestID: atomic.AddInt64(&ck.requestID, 1),
 		},

@@ -1,7 +1,7 @@
 package shardctrler
 
 import (
-	"6.824/kvraft"
+	"6.824/common"
 )
 
 //
@@ -26,13 +26,13 @@ import (
 
 type opResult struct {
 	err         Err
-	requestInfo kvraft.RequestInfo
+	requestInfo common.RequestInfo
 	cfg         *Config
 }
 type Op struct {
 	OP_TYPE int
 	OP_DATA []byte
-	kvraft.RequestInfo
+	common.RequestInfo
 }
 
 const (
@@ -52,7 +52,7 @@ type Err string
 
 type JoinArgs struct {
 	Servers map[int][]string // new GID -> servers mappings
-	kvraft.RequestInfo
+	common.RequestInfo
 }
 
 type JoinReply struct {
@@ -62,7 +62,7 @@ type JoinReply struct {
 
 type LeaveArgs struct {
 	GIDs []int
-	kvraft.RequestInfo
+	common.RequestInfo
 }
 
 type LeaveReply struct {
@@ -73,7 +73,7 @@ type LeaveReply struct {
 type MoveArgs struct {
 	Shard int
 	GID   int
-	kvraft.RequestInfo
+	common.RequestInfo
 }
 
 type MoveReply struct {
@@ -83,7 +83,7 @@ type MoveReply struct {
 
 type QueryArgs struct {
 	Num int // desired config number
-	kvraft.RequestInfo
+	common.RequestInfo
 }
 
 type QueryReply struct {

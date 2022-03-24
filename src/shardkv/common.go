@@ -16,6 +16,18 @@ const (
 	ErrWrongLeader = "ErrWrongLeader"
 )
 
+type Op struct {
+	OP_TYPE  int
+	OP_KEY   string
+	OP_VALUE string
+}
+
+const (
+	OP_GET = iota
+	OP_PUT
+	OP_APPEND
+)
+
 type Err string
 
 // Put or Append

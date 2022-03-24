@@ -26,7 +26,7 @@ type Op struct {
 	// optional
 	OPValue string
 
-	RequestInfo
+	common.RequestInfo
 }
 
 type KVServer struct {

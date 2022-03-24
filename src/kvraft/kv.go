@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"sync"
 
+	"6.824/common"
 	"6.824/labgob"
 	"github.com/sirupsen/logrus"
 )
@@ -32,7 +33,7 @@ func NewKVStore(logger *logrus.Entry) KVInterface {
 	return sks
 }
 
-func (sk *SimpleKVStore) isDuplicate(request RequestInfo) bool {
+func (sk *SimpleKVStore) isDuplicate(request common.RequestInfo) bool {
 	latestRequestId, ok := sk.ack[request.ClientID]
 	if ok {
 		return latestRequestId >= request.RequestID

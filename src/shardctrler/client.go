@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"6.824/kvraft"
+	"6.824/common"
 	"6.824/labrpc"
 	"6.824/logging"
 	"github.com/sirupsen/logrus"
@@ -47,7 +47,7 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 func (ck *Clerk) Query(num int) Config {
 	args := &QueryArgs{
 		Num: num,
-		RequestInfo: kvraft.RequestInfo{
+		RequestInfo: common.RequestInfo{
 			ClientID:  ck.clientID,
 			RequestID: atomic.AddInt64(&ck.requestID, 1),
 		},
@@ -73,7 +73,7 @@ func (ck *Clerk) Query(num int) Config {
 func (ck *Clerk) Join(servers map[int][]string) {
 	args := &JoinArgs{
 		Servers: servers,
-		RequestInfo: kvraft.RequestInfo{
+		RequestInfo: common.RequestInfo{
 			ClientID:  ck.clientID,
 			RequestID: atomic.AddInt64(&ck.requestID, 1),
 		},
@@ -99,7 +99,7 @@ func (ck *Clerk) Join(servers map[int][]string) {
 func (ck *Clerk) Leave(gids []int) {
 	args := &LeaveArgs{
 		GIDs: gids,
-		RequestInfo: kvraft.RequestInfo{
+		RequestInfo: common.RequestInfo{
 			ClientID:  ck.clientID,
 			RequestID: atomic.AddInt64(&ck.requestID, 1),
 		},
@@ -126,7 +126,7 @@ func (ck *Clerk) Move(shard int, gid int) {
 	args := &MoveArgs{
 		Shard: shard,
 		GID:   gid,
-		RequestInfo: kvraft.RequestInfo{
+		RequestInfo: common.RequestInfo{
 			ClientID:  ck.clientID,
 			RequestID: atomic.AddInt64(&ck.requestID, 1),
 		},

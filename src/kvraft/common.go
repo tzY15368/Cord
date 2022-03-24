@@ -1,6 +1,10 @@
 package kvraft
 
-import "errors"
+import (
+	"errors"
+
+	"6.824/common"
+)
 
 var (
 	ErrOK          = errors.New("OK")
@@ -20,16 +24,7 @@ const (
 type OPResult struct {
 	data        string
 	err         error
-	requestInfo RequestInfo
-}
-
-type RequestInfo struct {
-	ClientID  int64
-	RequestID int64
-}
-
-func (ri1 *RequestInfo) Equals(ri2 *RequestInfo) bool {
-	return ri1.ClientID == ri2.ClientID && ri1.RequestID == ri2.RequestID
+	requestInfo common.RequestInfo
 }
 
 // Put or Append
@@ -40,7 +35,7 @@ type PutAppendArgs struct {
 	// You'll have to add definitions here.
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
-	RequestInfo
+	common.RequestInfo
 }
 
 type Err string
@@ -61,7 +56,7 @@ func (par *PutAppendReply) SetReplyErr(err error) {
 type GetArgs struct {
 	Key string
 	// You'll have to add definitions here.
-	RequestInfo
+	common.RequestInfo
 }
 
 type GetReply struct {

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"6.824/kvraft"
+	"6.824/common"
 	"6.824/labgob"
 )
 
@@ -13,7 +13,7 @@ func (sc *ShardCtrler) loadSnapshot(data []byte) {
 }
 
 // isDuplicate not thread safe
-func (sc *ShardCtrler) isDuplicate(req kvraft.RequestInfo) bool {
+func (sc *ShardCtrler) isDuplicate(req common.RequestInfo) bool {
 	id, ok := sc.ack[req.ClientID]
 	if ok {
 		return id >= req.RequestID

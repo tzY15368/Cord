@@ -29,3 +29,12 @@ func Max(i int, j int) int {
 	}
 	return j
 }
+
+type RequestInfo struct {
+	ClientID  int64
+	RequestID int64
+}
+
+func (ri1 *RequestInfo) Equals(ri2 *RequestInfo) bool {
+	return ri1.ClientID == ri2.ClientID && ri1.RequestID == ri2.RequestID
+}
