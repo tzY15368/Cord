@@ -52,6 +52,7 @@ func (sc *ShardCtrler) Join(args *JoinArgs, reply *JoinReply) {
 
 func (sc *ShardCtrler) Leave(args *LeaveArgs, reply *LeaveReply) {
 	// Your code here.
+	sc.logger.WithField("gid", args.GIDs).Debug("sc: leave: params")
 	data := new(bytes.Buffer)
 	encoder := labgob.NewEncoder(data)
 	err := encoder.Encode(&args.GIDs)

@@ -11,19 +11,53 @@ func TestConfig_rebalance(t *testing.T) {
 		name string
 		cfg  *Config
 	}{
-		// TODO: Add test cases.
 		{
-			name: "1",
+			name: "normal",
+			cfg: &Config{
+				Num:    0,
+				Shards: [NShards]int{1, 1, 1, 1, 1, 1, 2, 2, 3, 4},
+				Groups: map[int][]string{
+					1: {},
+					2: {},
+					3: {},
+					4: {},
+				},
+			},
+		},
+		{
+			name: "skew",
 			cfg: &Config{
 				Num: 1,
 				Shards: [NShards]int{
-					1, 1, 1, 1, 1, 1, 1, 2, 3, 4,
+					1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 				},
 				Groups: map[int][]string{
 					1: {"x", "y"},
 					2: {"a", "b"},
-					3: {"c", "d"},
-					4: {"f", "e"},
+				},
+			},
+		},
+		{
+			name: "join",
+			cfg: &Config{
+				Num: 1,
+				Shards: [NShards]int{
+					0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				},
+				Groups: map[int][]string{
+					1: {"x", "y"},
+				},
+			},
+		},
+		{
+			name: "leave",
+			cfg: &Config{
+				Num: 1,
+				Shards: [NShards]int{
+					1, 1, 1, 1, 1, 2, 2, 2, 2,
+				},
+				Groups: map[int][]string{
+					1: {"x", "y"},
 				},
 			},
 		},
