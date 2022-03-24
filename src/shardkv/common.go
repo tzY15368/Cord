@@ -1,5 +1,7 @@
 package shardkv
 
+import "6.824/common"
+
 //
 // Sharded key/value server.
 // Lots of replica groups, each running Raft.
@@ -22,6 +24,12 @@ type Op struct {
 	OP_VALUE string
 }
 
+type OPResult struct {
+	data string
+	err  Err
+	common.RequestInfo
+}
+
 const (
 	OP_GET = iota
 	OP_PUT
@@ -36,9 +44,8 @@ type PutAppendArgs struct {
 	Key   string
 	Value string
 	Op    string // "Put" or "Append"
-	// You'll have to add definitions here.
-	// Field names must start with capital letters,
-	// otherwise RPC will break.
+
+	common.RequestInfo
 }
 
 type PutAppendReply struct {
@@ -47,7 +54,8 @@ type PutAppendReply struct {
 
 type GetArgs struct {
 	Key string
-	// You'll have to add definitions here.
+
+	common.RequestInfo
 }
 
 type GetReply struct {

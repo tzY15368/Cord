@@ -8,11 +8,19 @@ package shardkv
 // talks to the group that holds the key's shard.
 //
 
-import "6.824/labrpc"
-import "crypto/rand"
-import "math/big"
-import "6.824/shardctrler"
-import "time"
+import (
+	"crypto/rand"
+	"math/big"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"6.824/common"
+	"6.824/labrpc"
+	"6.824/logging"
+	"6.824/shardctrler"
+	"github.com/sirupsen/logrus"
+)
 
 //
 // which shard is a key in?
@@ -36,10 +44,15 @@ func nrand() int64 {
 }
 
 type Clerk struct {
-	sm       *shardctrler.Clerk
-	config   shardctrler.Config
-	make_end func(string) *labrpc.ClientEnd
-	// You will have to modify this struct.
+	sm        *shardctrler.Clerk
+	config    shardctrler.Config
+	make_end  func(string) *labrpc.ClientEnd
+	clientID  int64
+	requestID int64
+	// map gid to actual leader id in group
+	groupLeader map[int]string
+	logger      *logrus.Entry
+	mu          sync.Mutex
 }
 
 //
@@ -55,7 +68,10 @@ func MakeClerk(ctrlers []*labrpc.ClientEnd, make_end func(string) *labrpc.Client
 	ck := new(Clerk)
 	ck.sm = shardctrler.MakeClerk(ctrlers)
 	ck.make_end = make_end
-	// You'll have to add code here.
+	ck.clientID = nrand()
+	ck.requestID = 0
+	ck.groupLeader = make(map[int]string)
+	ck.logger = logging.GetLogger("skv", logrus.DebugLevel).WithField("id", ck.clientID)
 	return ck
 }
 
@@ -66,14 +82,30 @@ func MakeClerk(ctrlers []*labrpc.ClientEnd, make_end func(string) *labrpc.Client
 // You will have to modify this function.
 //
 func (ck *Clerk) Get(key string) string {
-	args := GetArgs{}
-	args.Key = key
+	args := GetArgs{
+		Key: key,
+		RequestInfo: common.RequestInfo{
+			ClientID:  ck.clientID,
+			RequestID: atomic.AddInt64(&ck.requestID, 1),
+		},
+	}
 
 	for {
 		shard := key2shard(key)
 		gid := ck.config.Shards[shard]
 		if servers, ok := ck.config.Groups[gid]; ok {
 			// try each server for the shard.
+			for {
+				ck.mu.Lock()
+				var serverName string
+				if server, ok2 := ck.groupLeader[gid]; ok2 {
+					serverName = server
+				} else {
+					ck.groupLeader[gid] = servers[0]
+					serverName = servers[0]
+				}
+				ck.mu.Unlock()
+			}
 			for si := 0; si < len(servers); si++ {
 				srv := ck.make_end(servers[si])
 				var reply GetReply
@@ -104,7 +136,6 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 	args.Key = key
 	args.Value = value
 	args.Op = op
-
 
 	for {
 		shard := key2shard(key)
