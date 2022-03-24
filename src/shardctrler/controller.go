@@ -101,6 +101,9 @@ func (sc *ShardCtrler) evalOp(op Op) opResult {
 		if err != nil {
 			sc.logger.Panic("decode fail", op.OP_TYPE, err)
 		}
+		if num == -1 || num > len(sc.configs)-1 {
+			num = len(sc.configs) - 1
+		}
 		sc.logger.WithField("num", num).Debug("sc: query: params")
 		return opResult{
 			err:         OK,

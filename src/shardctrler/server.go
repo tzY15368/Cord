@@ -30,7 +30,10 @@ type ShardCtrler struct {
 func (sc *ShardCtrler) Join(args *JoinArgs, reply *JoinReply) {
 	data := new(bytes.Buffer)
 	encoder := labgob.NewEncoder(data)
-	encoder.Encode(&args.Servers)
+	err := encoder.Encode(&args.Servers)
+	if err != nil {
+		panic(err)
+	}
 	op := Op{
 		OP_TYPE:     OP_JOIN,
 		OP_DATA:     data.Bytes(),
@@ -51,7 +54,10 @@ func (sc *ShardCtrler) Leave(args *LeaveArgs, reply *LeaveReply) {
 	// Your code here.
 	data := new(bytes.Buffer)
 	encoder := labgob.NewEncoder(data)
-	encoder.Encode(&args.GIDs)
+	err := encoder.Encode(&args.GIDs)
+	if err != nil {
+		panic(err)
+	}
 	op := Op{
 		OP_TYPE:     OP_LEAVE,
 		OP_DATA:     data.Bytes(),
@@ -71,8 +77,14 @@ func (sc *ShardCtrler) Leave(args *LeaveArgs, reply *LeaveReply) {
 func (sc *ShardCtrler) Move(args *MoveArgs, reply *MoveReply) {
 	data := new(bytes.Buffer)
 	encoder := labgob.NewEncoder(data)
-	encoder.Encode(&args.GID)
-	encoder.Encode(&args.Shard)
+	err := encoder.Encode(&args.GID)
+	if err != nil {
+		panic(err)
+	}
+	err = encoder.Encode(&args.Shard)
+	if err != nil {
+		panic(err)
+	}
 	op := Op{
 		OP_TYPE:     OP_MOVE,
 		OP_DATA:     data.Bytes(),
@@ -93,7 +105,10 @@ func (sc *ShardCtrler) Move(args *MoveArgs, reply *MoveReply) {
 func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 	data := new(bytes.Buffer)
 	encoder := labgob.NewEncoder(data)
-	encoder.Encode(&args.Num)
+	err := encoder.Encode(&args.Num)
+	if err != nil {
+		panic(err)
+	}
 	op := Op{
 		OP_TYPE:     OP_QUERY,
 		OP_DATA:     data.Bytes(),
@@ -113,6 +128,7 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 }
 
 // appendConfig not thread safe
+// returns the newly appended config for update
 func (sc *ShardCtrler) appendConfig() *Config {
 	newCfg := sc.configs[len(sc.configs)-1].clone()
 	sc.configs = append(sc.configs, newCfg)
@@ -152,6 +168,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 	sc.applyCh = make(chan raft.ApplyMsg)
 	sc.rf = raft.Make(servers, me, persister, sc.applyCh)
 	sc.notify = make(map[int]chan opResult)
+	sc.ack = make(map[int64]int64)
 	// Your code here.
 	go sc.applyMsgHandler()
 	return sc
