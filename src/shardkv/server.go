@@ -3,9 +3,13 @@ package shardkv
 import (
 	"sync"
 
+	"6.824/common"
 	"6.824/labgob"
 	"6.824/labrpc"
+	"6.824/logging"
 	"6.824/raft"
+	"6.824/shardctrler"
+	"github.com/sirupsen/logrus"
 )
 
 type ShardKV struct {
@@ -17,7 +21,9 @@ type ShardKV struct {
 	gid          int
 	ctrlers      []*labrpc.ClientEnd
 	maxraftstate int // snapshot if log grows this big
-
+	ctlClerk     *shardctrler.Clerk
+	config       shardctrler.Config
+	logger       *logrus.Entry
 	// Your definitions here.
 }
 
@@ -79,7 +85,6 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.make_end = make_end
 	kv.gid = gid
 	kv.ctrlers = ctrlers
-
 	// Your initialization code here.
 
 	// Use something like this to talk to the shardctrler:
@@ -87,6 +92,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
-
+	kv.logger = logging.GetLogger("skv", common.ShardKVLogLevel).WithField("id", me)
+	go kv.pollCFG()
 	return kv
 }
