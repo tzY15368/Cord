@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"sync"
 
+	"6.824/common"
 	"6.824/labgob"
 	"6.824/labrpc"
 	"6.824/logging"
@@ -161,7 +162,7 @@ func (sc *ShardCtrler) Raft() *raft.Raft {
 func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister) *ShardCtrler {
 	sc := new(ShardCtrler)
 	sc.me = me
-	sc.logger = logging.GetLogger("sc", logrus.DebugLevel).WithField("id", me)
+	sc.logger = logging.GetLogger("sc", common.ShardCtlLogLevel).WithField("id", me)
 	sc.configs = make([]Config, 1)
 	sc.configs[0].Groups = map[int][]string{}
 

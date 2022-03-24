@@ -10,6 +10,8 @@ const (
 	RaftLogLevel     = logrus.InfoLevel
 	KVServerLogLevel = logrus.DebugLevel
 	KVStoreLogLevel  = logrus.InfoLevel
+	ShardCtlLogLevel = logrus.InfoLevel
+	ShardKVLogLevel  = logrus.DebugLevel
 )
 const (
 	ApplyCHTimeout = 15 * time.Second

@@ -49,8 +49,8 @@ type Clerk struct {
 	make_end  func(string) *labrpc.ClientEnd
 	clientID  int64
 	requestID int64
-	// map gid to actual leader id in group
-	groupLeader map[int]string
+	// map gid to actual leader servername offset in group
+	groupLeader map[int]int
 	logger      *logrus.Entry
 	mu          sync.Mutex
 }
@@ -70,8 +70,8 @@ func MakeClerk(ctrlers []*labrpc.ClientEnd, make_end func(string) *labrpc.Client
 	ck.make_end = make_end
 	ck.clientID = nrand()
 	ck.requestID = 0
-	ck.groupLeader = make(map[int]string)
-	ck.logger = logging.GetLogger("skv", logrus.DebugLevel).WithField("id", ck.clientID)
+	ck.groupLeader = make(map[int]int)
+	ck.logger = logging.GetLogger("skv", common.ShardKVLogLevel).WithField("id", ck.clientID)
 	return ck
 }
 
@@ -98,30 +98,37 @@ func (ck *Clerk) Get(key string) string {
 			for {
 				ck.mu.Lock()
 				var serverName string
-				if server, ok2 := ck.groupLeader[gid]; ok2 {
-					serverName = server
+				if serverIdx, ok2 := ck.groupLeader[gid]; ok2 {
+					serverName = servers[serverIdx]
 				} else {
-					ck.groupLeader[gid] = servers[0]
+					ck.groupLeader[gid] = 0
 					serverName = servers[0]
 				}
 				ck.mu.Unlock()
-			}
-			for si := 0; si < len(servers); si++ {
-				srv := ck.make_end(servers[si])
-				var reply GetReply
-				ok := srv.Call("ShardKV.Get", &args, &reply)
+				sv := ck.make_end(serverName)
+				reply := GetReply{}
+				ok := sv.Call("ShardKV.Get", &args, &reply)
 				if ok && (reply.Err == OK || reply.Err == ErrNoKey) {
 					return reply.Value
+				} else {
+					if reply.Err == ErrWrongLeader {
+						ck.mu.Lock()
+						ck.groupLeader[gid] = (ck.groupLeader[gid] + 1) % len(servers)
+						ck.mu.Unlock()
+						continue
+					}
+					if reply.Err == ErrWrongGroup {
+						break
+					}
 				}
-				if ok && (reply.Err == ErrWrongGroup) {
-					break
-				}
-				// ... not ok, or ErrWrongLeader
 			}
 		}
 		time.Sleep(100 * time.Millisecond)
 		// ask controler for the latest configuration.
+		ck.mu.Lock()
 		ck.config = ck.sm.Query(-1)
+		ck.logger.WithField("config", ck.config).Debug("sck: get: got new config")
+		ck.mu.Unlock()
 	}
 
 	return ""
@@ -132,31 +139,53 @@ func (ck *Clerk) Get(key string) string {
 // You will have to modify this function.
 //
 func (ck *Clerk) PutAppend(key string, value string, op string) {
-	args := PutAppendArgs{}
-	args.Key = key
-	args.Value = value
-	args.Op = op
+	args := PutAppendArgs{
+		Key:   key,
+		Value: value,
+		Op:    op,
+		RequestInfo: common.RequestInfo{
+			ClientID:  ck.clientID,
+			RequestID: atomic.AddInt64(&ck.requestID, 1),
+		},
+	}
 
 	for {
 		shard := key2shard(key)
 		gid := ck.config.Shards[shard]
 		if servers, ok := ck.config.Groups[gid]; ok {
-			for si := 0; si < len(servers); si++ {
-				srv := ck.make_end(servers[si])
-				var reply PutAppendReply
-				ok := srv.Call("ShardKV.PutAppend", &args, &reply)
-				if ok && reply.Err == OK {
+			for {
+				ck.mu.Lock()
+				var svName string
+				if svIdx, ok2 := ck.groupLeader[gid]; ok2 {
+					svName = servers[svIdx]
+				} else {
+					ck.groupLeader[gid] = 0
+					svName = servers[0]
+				}
+				ck.mu.Unlock()
+				reply := PutAppendReply{}
+				ok := ck.make_end(svName).Call("ShardKV.PutAppend", &args, &reply)
+				if ok && (reply.Err == OK || reply.Err == ErrNoKey) {
 					return
+				} else {
+					if reply.Err == ErrWrongLeader {
+						ck.mu.Lock()
+						ck.groupLeader[gid] = (ck.groupLeader[gid] + 1) % len(servers)
+						ck.mu.Unlock()
+						continue
+					}
+					if reply.Err == ErrWrongGroup {
+						break
+					}
 				}
-				if ok && reply.Err == ErrWrongGroup {
-					break
-				}
-				// ... not ok, or ErrWrongLeader
 			}
 		}
 		time.Sleep(100 * time.Millisecond)
 		// ask controler for the latest configuration.
+		ck.mu.Lock()
 		ck.config = ck.sm.Query(-1)
+		ck.logger.WithField("config", ck.config).Debug("sck: putappend: got new config")
+		ck.mu.Unlock()
 	}
 }
 

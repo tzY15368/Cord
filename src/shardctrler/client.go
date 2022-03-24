@@ -40,7 +40,7 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck.clientID = nrand()
 	ck.requestID = 0
 	ck.leader = 0
-	ck.logger = logging.GetLogger("sc", logrus.DebugLevel).WithField("id", ck.clientID)
+	ck.logger = logging.GetLogger("sc", common.ShardCtlLogLevel).WithField("id", ck.clientID)
 	return ck
 }
 
