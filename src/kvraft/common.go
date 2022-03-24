@@ -28,7 +28,7 @@ type RequestInfo struct {
 	RequestID int64
 }
 
-func (ri1 *RequestInfo) equals(ri2 *RequestInfo) bool {
+func (ri1 *RequestInfo) Equals(ri2 *RequestInfo) bool {
 	return ri1.ClientID == ri2.ClientID && ri1.RequestID == ri2.RequestID
 }
 

@@ -2,7 +2,6 @@ package kvraft
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,15 +13,6 @@ import (
 	"6.824/raft"
 	"github.com/sirupsen/logrus"
 )
-
-const Debug = false
-
-func DPrintf(format string, a ...interface{}) (n int, err error) {
-	if Debug {
-		log.Printf(format, a...)
-	}
-	return
-}
 
 type Op struct {
 	// Your definitions here.
@@ -127,7 +117,7 @@ func (kv *KVServer) proposeAndApply(op Op, replier ReplyInterface) string {
 	go func() {
 		// opResult := kv.applychListener.waitForApplyOnIndex(index)
 		opResult := kv.applyEntry(index)
-		if !opResult.requestInfo.equals(&op.RequestInfo) {
+		if !opResult.requestInfo.Equals(&op.RequestInfo) {
 			lostLeaderChan <- struct{}{}
 			kv.logger.WithField("index", index).Warn("propose: different content on index")
 		} else {

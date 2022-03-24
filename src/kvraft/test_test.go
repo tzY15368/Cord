@@ -447,7 +447,7 @@ func TestSpeed3A(t *testing.T) {
 			panic(err)
 		}
 		go func() {
-			time.Sleep(30 * time.Second)
+			//time.Sleep(1 * time.Second)
 			pprof.StartCPUProfile(f)
 		}()
 		defer pprof.StopCPUProfile()

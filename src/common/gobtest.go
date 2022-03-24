@@ -7,7 +7,7 @@ import (
 	"6.824/labgob"
 )
 
-func main() {
+func t2() {
 	d1 := make(map[string]string)
 	d2 := make(map[int]int)
 	d1["asd"] = "sdf"

@@ -1,11 +1,15 @@
 package shardctrler
 
+import (
+	"bytes"
+	"sync"
 
-import "6.824/raft"
-import "6.824/labrpc"
-import "sync"
-import "6.824/labgob"
-
+	"6.824/labgob"
+	"6.824/labrpc"
+	"6.824/logging"
+	"6.824/raft"
+	"github.com/sirupsen/logrus"
+)
 
 type ShardCtrler struct {
 	mu      sync.Mutex
@@ -14,32 +18,106 @@ type ShardCtrler struct {
 	applyCh chan raft.ApplyMsg
 
 	// Your data here.
+	logger *logrus.Entry
 
+	inSnapshot int32
+
+	notify  map[int]chan opResult
+	ack     map[int64]int64
 	configs []Config // indexed by config num
 }
 
-
-type Op struct {
-	// Your data here.
-}
-
-
 func (sc *ShardCtrler) Join(args *JoinArgs, reply *JoinReply) {
-	// Your code here.
+	data := new(bytes.Buffer)
+	encoder := labgob.NewEncoder(data)
+	encoder.Encode(&args.Servers)
+	op := Op{
+		OP_TYPE:     OP_JOIN,
+		OP_DATA:     data.Bytes(),
+		RequestInfo: args.RequestInfo,
+	}
+	// ...apply
+	_, _err := sc.proposeAndApply(op)
+	if _err == ErrWrongLeader {
+		reply.WrongLeader = true
+	}
+	if _err != OK {
+		reply.Err = _err
+		return
+	}
 }
 
 func (sc *ShardCtrler) Leave(args *LeaveArgs, reply *LeaveReply) {
 	// Your code here.
+	data := new(bytes.Buffer)
+	encoder := labgob.NewEncoder(data)
+	encoder.Encode(&args.GIDs)
+	op := Op{
+		OP_TYPE:     OP_LEAVE,
+		OP_DATA:     data.Bytes(),
+		RequestInfo: args.RequestInfo,
+	}
+	// ...apply
+	_, _err := sc.proposeAndApply(op)
+	if _err == ErrWrongLeader {
+		reply.WrongLeader = true
+	}
+	if _err != OK {
+		reply.Err = _err
+		return
+	}
 }
 
 func (sc *ShardCtrler) Move(args *MoveArgs, reply *MoveReply) {
-	// Your code here.
+	data := new(bytes.Buffer)
+	encoder := labgob.NewEncoder(data)
+	encoder.Encode(&args.GID)
+	encoder.Encode(&args.Shard)
+	op := Op{
+		OP_TYPE:     OP_MOVE,
+		OP_DATA:     data.Bytes(),
+		RequestInfo: args.RequestInfo,
+	}
+	// ...apply
+	_, _err := sc.proposeAndApply(op)
+	if _err == ErrWrongLeader {
+		reply.WrongLeader = true
+	}
+	if _err != OK {
+		reply.Err = _err
+		return
+	}
+
 }
 
 func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
-	// Your code here.
+	data := new(bytes.Buffer)
+	encoder := labgob.NewEncoder(data)
+	encoder.Encode(&args.Num)
+	op := Op{
+		OP_TYPE:     OP_QUERY,
+		OP_DATA:     data.Bytes(),
+		RequestInfo: args.RequestInfo,
+	}
+	res, _err := sc.proposeAndApply(op)
+
+	if _err == ErrWrongLeader {
+		reply.WrongLeader = true
+	}
+	if _err != OK {
+		reply.Err = _err
+		return
+	}
+	reply.Config = *res
+	sc.logger.WithField("reply", reply).Debug("sc: query: reply")
 }
 
+// appendConfig not thread safe
+func (sc *ShardCtrler) appendConfig() *Config {
+	newCfg := sc.configs[len(sc.configs)-1].clone()
+	sc.configs = append(sc.configs, newCfg)
+	return &newCfg
+}
 
 //
 // the tester calls Kill() when a ShardCtrler instance won't
@@ -66,15 +144,15 @@ func (sc *ShardCtrler) Raft() *raft.Raft {
 func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister) *ShardCtrler {
 	sc := new(ShardCtrler)
 	sc.me = me
-
+	sc.logger = logging.GetLogger("sc", logrus.DebugLevel).WithField("id", me)
 	sc.configs = make([]Config, 1)
 	sc.configs[0].Groups = map[int][]string{}
 
 	labgob.Register(Op{})
 	sc.applyCh = make(chan raft.ApplyMsg)
 	sc.rf = raft.Make(servers, me, persister, sc.applyCh)
-
+	sc.notify = make(map[int]chan opResult)
 	// Your code here.
-
+	go sc.applyMsgHandler()
 	return sc
 }

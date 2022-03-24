@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/aquasecurity/libbpfgo v0.2.1-libbpf-0.4.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.1 // indirect
+	github.com/cweill/gotests v1.6.0 // indirect
 	github.com/go-delve/delve v1.7.1 // indirect
 	github.com/google/pprof v0.0.0-20220314021825-5bba342933ea // indirect
 	github.com/google/uuid v1.3.0
@@ -18,5 +19,6 @@ require (
 	github.com/spf13/cobra v1.2.1 // indirect
 	go.starlark.net v0.0.0-20210901212718-87f333178d59 // indirect
 	golang.org/x/arch v0.0.0-20210901143047-ebb09ed340f1 // indirect
-	golang.org/x/sys v0.0.0-20220318055525-2edf467146b5 // indirect
+	golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8 // indirect
+	golang.org/x/tools v0.1.10 // indirect
 )
