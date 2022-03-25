@@ -9,8 +9,6 @@ package shardkv
 //
 
 import (
-	"crypto/rand"
-	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,21 +25,6 @@ import (
 // please use this function,
 // and please do not change it.
 //
-func key2shard(key string) int {
-	shard := 0
-	if len(key) > 0 {
-		shard = int(key[0])
-	}
-	shard %= shardctrler.NShards
-	return shard
-}
-
-func nrand() int64 {
-	max := big.NewInt(int64(1) << 62)
-	bigx, _ := rand.Int(rand.Reader, max)
-	x := bigx.Int64()
-	return x
-}
 
 type Clerk struct {
 	sm        *shardctrler.Clerk
@@ -111,6 +94,7 @@ func (ck *Clerk) Get(key string) string {
 				if ok && (reply.Err == OK || reply.Err == ErrNoKey) {
 					return reply.Value
 				} else {
+					ck.logger.WithField("err", reply.Err).Debug("sck: get: got error")
 					if reply.Err == ErrWrongLeader {
 						ck.mu.Lock()
 						ck.groupLeader[gid] = (ck.groupLeader[gid] + 1) % len(servers)
@@ -168,6 +152,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 				if ok && (reply.Err == OK || reply.Err == ErrNoKey) {
 					return
 				} else {
+					ck.logger.WithField("err", reply.Err).Debug("sck: get: got error")
 					if reply.Err == ErrWrongLeader {
 						ck.mu.Lock()
 						ck.groupLeader[gid] = (ck.groupLeader[gid] + 1) % len(servers)

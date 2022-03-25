@@ -1,6 +1,7 @@
 package shardkv
 
 import (
+	"fmt"
 	"sync"
 
 	"6.824/common"
@@ -13,7 +14,7 @@ import (
 )
 
 type ShardKV struct {
-	mu           sync.Mutex
+	mu           sync.RWMutex
 	me           int
 	rf           *raft.Raft
 	applyCh      chan raft.ApplyMsg
@@ -24,15 +25,35 @@ type ShardKV struct {
 	ctlClerk     *shardctrler.Clerk
 	config       shardctrler.Config
 	logger       *logrus.Entry
+	notify       map[int]chan opResult
+	ack          map[int64]int64
+	data         map[string]string
+	inSnapshot   int32
 	// Your definitions here.
 }
 
 func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
-	// Your code here.
+	op := Op{
+		OP_TYPE:     OP_GET,
+		OP_KEY:      args.Key,
+		RequestInfo: args.RequestInfo,
+	}
+	kv.proposeAndApply(op, reply)
+	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).
+		Debug(fmt.Sprintf("skv: %s: result", op.OP_TYPE))
 }
 
 func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
-	// Your code here.
+
+	op := Op{
+		OP_TYPE:     OP_GET,
+		OP_KEY:      args.Key,
+		OP_VALUE:    args.Value,
+		RequestInfo: args.RequestInfo,
+	}
+	kv.proposeAndApply(op, reply)
+	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).
+		Debug(fmt.Sprintf("skv: %s: result", op.OP_TYPE))
 }
 
 //
@@ -85,14 +106,12 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.make_end = make_end
 	kv.gid = gid
 	kv.ctrlers = ctrlers
-	// Your initialization code here.
-
-	// Use something like this to talk to the shardctrler:
-	// kv.mck = shardctrler.MakeClerk(kv.ctrlers)
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 	kv.logger = logging.GetLogger("skv", common.ShardKVLogLevel).WithField("id", me)
+	kv.ctlClerk = shardctrler.MakeClerk(kv.ctrlers)
 	go kv.pollCFG()
+	go kv.applyMsgHandler()
 	return kv
 }

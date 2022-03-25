@@ -134,21 +134,21 @@ func (kv *KVServer) proposeAndApply(op Op, replier ReplyInterface) string {
 			}).Debug("got opresult")
 		}
 	}()
-	var run int32 = 1
-	go func() {
-		for atomic.LoadInt32(&run) == 1 {
-			_, isLeader := kv.rf.GetState()
-			if !isLeader {
-				kv.logger.Warn("kv: lost leadership")
-				lostLeaderChan <- struct{}{}
-				break
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
-	}()
+	// var run int32 = 1
+	// go func() {
+	// 	for atomic.LoadInt32(&run) == 1 {
+	// 		_, isLeader := kv.rf.GetState()
+	// 		if !isLeader {
+	// 			kv.logger.Warn("kv: lost leadership")
+	// 			lostLeaderChan <- struct{}{}
+	// 			break
+	// 		}
+	// 		time.Sleep(10 * time.Millisecond)
+	// 	}
+	// }()
 	select {
 	case opEndResult = <-doneChan:
-		atomic.StoreInt32(&run, 0)
+		//atomic.StoreInt32(&run, 0)
 		break
 	case <-lostLeaderChan:
 		opEndResult.err = ErrWrongLeader

@@ -2,6 +2,12 @@ package shardkv
 
 import "time"
 
+// isKeyServed not thread safe
+func (kv *ShardKV) isKeyServed(key string) bool {
+	shard := key2shard(key)
+	return kv.config.Shards[shard] == kv.gid
+}
+
 func (kv *ShardKV) pollCFG() {
 	for {
 		cfg := kv.ctlClerk.Query(-1)
@@ -11,6 +17,7 @@ func (kv *ShardKV) pollCFG() {
 				WithField("new", cfg.Num).Debug("skv: poll: found new cfg")
 			kv.config = cfg
 		}
+
 		kv.mu.Unlock()
 		time.Sleep(100 * time.Millisecond)
 	}

@@ -1,6 +1,12 @@
 package shardkv
 
-import "6.824/common"
+import (
+	"crypto/rand"
+	"math/big"
+
+	"6.824/common"
+	"6.824/shardctrler"
+)
 
 //
 // Sharded key/value server.
@@ -22,12 +28,18 @@ type Op struct {
 	OP_TYPE  int
 	OP_KEY   string
 	OP_VALUE string
+	common.RequestInfo
 }
 
-type OPResult struct {
+type opResult struct {
 	data string
 	err  Err
 	common.RequestInfo
+}
+
+type replyable interface {
+	SetValue(string)
+	SetErr(Err)
 }
 
 const (
@@ -52,6 +64,9 @@ type PutAppendReply struct {
 	Err Err
 }
 
+func (par *PutAppendReply) SetValue(i string) {}
+func (par *PutAppendReply) SetErr(e Err)      { par.Err = e }
+
 type GetArgs struct {
 	Key string
 
@@ -61,4 +76,23 @@ type GetArgs struct {
 type GetReply struct {
 	Err   Err
 	Value string
+}
+
+func (gar *GetReply) SetValue(i string) { gar.Value = i }
+func (gar *GetReply) SetErr(e Err)      { gar.Err = e }
+
+func key2shard(key string) int {
+	shard := 0
+	if len(key) > 0 {
+		shard = int(key[0])
+	}
+	shard %= shardctrler.NShards
+	return shard
+}
+
+func nrand() int64 {
+	max := big.NewInt(int64(1) << 62)
+	bigx, _ := rand.Int(rand.Reader, max)
+	x := bigx.Int64()
+	return x
 }
