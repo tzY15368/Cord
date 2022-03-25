@@ -3,6 +3,7 @@ package shardkv
 import (
 	"crypto/rand"
 	"math/big"
+	"time"
 
 	"6.824/common"
 	"6.824/shardctrler"
@@ -22,6 +23,10 @@ const (
 	ErrNoKey       = "ErrNoKey"
 	ErrWrongGroup  = "ErrWrongGroup"
 	ErrWrongLeader = "ErrWrongLeader"
+)
+
+const (
+	pollCFGInterval = 75 * time.Millisecond
 )
 
 type Op struct {
@@ -46,6 +51,8 @@ const (
 	OP_GET = iota
 	OP_PUT
 	OP_APPEND
+	OP_CFG
+	OP_TRANS
 )
 
 type Err string
@@ -96,3 +103,10 @@ func nrand() int64 {
 	x := bigx.Int64()
 	return x
 }
+
+type CFGReply struct {
+	Err Err
+}
+
+func (cgr *CFGReply) SetValue(i string) {}
+func (cfg *CFGReply) SetErr(e Err)      { cfg.Err = e }

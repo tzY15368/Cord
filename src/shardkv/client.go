@@ -107,7 +107,7 @@ func (ck *Clerk) Get(key string) string {
 				}
 			}
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(pollCFGInterval)
 		// ask controler for the latest configuration.
 		ck.mu.Lock()
 		ck.config = ck.sm.Query(-1)
@@ -152,7 +152,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 				if ok && (reply.Err == OK || reply.Err == ErrNoKey) {
 					return
 				} else {
-					ck.logger.WithField("err", reply.Err).Debug("sck: putappend: got error")
+					ck.logger.WithField("err", reply.Err).WithField("ok", ok).Debug("sck: putappend: got error")
 					if reply.Err == ErrWrongLeader {
 						ck.mu.Lock()
 						ck.groupLeader[gid] = (ck.groupLeader[gid] + 1) % len(servers)
@@ -165,7 +165,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 				}
 			}
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(pollCFGInterval)
 		// ask controler for the latest configuration.
 		ck.mu.Lock()
 		ck.config = ck.sm.Query(-1)

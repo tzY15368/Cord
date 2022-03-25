@@ -24,11 +24,15 @@ type ShardKV struct {
 	maxraftstate int // snapshot if log grows this big
 	ctlClerk     *shardctrler.Clerk
 	config       shardctrler.Config
+	configRWLock sync.RWMutex
 	logger       *logrus.Entry
 	notify       map[int]chan opResult
 	ack          map[int64]int64
 	data         map[string]string
 	inSnapshot   int32
+	clientID     int64
+	requestID    int64
+	shardLocks   []struct{}
 	// Your definitions here.
 }
 
@@ -120,6 +124,9 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.notify = make(map[int]chan opResult)
 	kv.ack = make(map[int64]int64)
 	kv.data = make(map[string]string)
+	kv.clientID = nrand()
+	kv.requestID = 0
+	kv.shardLocks = make([]struct{}, shardctrler.NShards)
 	go kv.pollCFG()
 	go kv.applyMsgHandler()
 	return kv

@@ -9,14 +9,19 @@ import (
 )
 
 func (kv *ShardKV) proposeAndApply(op Op, replier replyable) {
-	// 先检查是否是正确的group
-	kv.mu.RLock()
-	wrongSv := !kv.isKeyServed(op.OP_KEY)
-	kv.mu.RUnlock()
+	// 1: 如果是CFG/TRANS操作，直接进入start
+	// 2:检查是否是正确的group
+	var wrongSv bool
+	if op.OP_TYPE == OP_CFG || op.OP_TYPE == OP_TRANS {
+		goto DirectStart
+	}
+	wrongSv = !kv.isKeyServed(op.OP_KEY)
 	if wrongSv {
 		replier.SetErr(ErrWrongGroup)
 		return
 	}
+
+DirectStart:
 	index, _, isLeader := kv.rf.Start(op)
 	if !isLeader {
 		replier.SetErr(ErrWrongLeader)
@@ -68,7 +73,15 @@ func (kv *ShardKV) applyMsgHandler() {
 	for msg := range kv.applyCh {
 		if msg.CommandValid {
 			op := msg.Command.(Op)
-			opRes := kv.evalOp(msg.CommandIndex, op)
+			var opRes opResult
+			if op.OP_TYPE == OP_CFG {
+				// 给对应key加锁或解锁
+				opRes = kv.evalCFGOp(&op)
+			} else if op.OP_TYPE == OP_TRANS {
+
+			} else {
+				opRes = kv.evalOp(msg.CommandIndex, op)
+			}
 			kv.mu.Lock()
 			ch, ok := kv.notify[msg.CommandIndex]
 			if ok {
