@@ -40,20 +40,26 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
 	}
 	kv.proposeAndApply(op, reply)
 	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).
-		Debug(fmt.Sprintf("skv: %s: result", op.OP_TYPE))
+		Debug("skv: get: result")
 }
 
 func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
-
 	op := Op{
-		OP_TYPE:     OP_GET,
 		OP_KEY:      args.Key,
 		OP_VALUE:    args.Value,
 		RequestInfo: args.RequestInfo,
 	}
+	switch {
+	case args.Op == "Put":
+		op.OP_TYPE = OP_PUT
+	case args.Op == "Append":
+		op.OP_TYPE = OP_APPEND
+	default:
+		kv.logger.Panic("invalid op", args.Op)
+	}
 	kv.proposeAndApply(op, reply)
 	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).
-		Debug(fmt.Sprintf("skv: %s: result", op.OP_TYPE))
+		Debug("skv: putappend: result")
 }
 
 //
@@ -111,6 +117,9 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 	kv.logger = logging.GetLogger("skv", common.ShardKVLogLevel).WithField("id", me)
 	kv.ctlClerk = shardctrler.MakeClerk(kv.ctrlers)
+	kv.notify = make(map[int]chan opResult)
+	kv.ack = make(map[int64]int64)
+	kv.data = make(map[string]string)
 	go kv.pollCFG()
 	go kv.applyMsgHandler()
 	return kv

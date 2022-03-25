@@ -152,7 +152,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 				if ok && (reply.Err == OK || reply.Err == ErrNoKey) {
 					return
 				} else {
-					ck.logger.WithField("err", reply.Err).Debug("sck: get: got error")
+					ck.logger.WithField("err", reply.Err).Debug("sck: putappend: got error")
 					if reply.Err == ErrWrongLeader {
 						ck.mu.Lock()
 						ck.groupLeader[gid] = (ck.groupLeader[gid] + 1) % len(servers)

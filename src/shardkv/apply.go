@@ -1,9 +1,11 @@
 package shardkv
 
 import (
+	"fmt"
 	"time"
 
 	"6.824/common"
+	"github.com/sirupsen/logrus"
 )
 
 func (kv *ShardKV) proposeAndApply(op Op, replier replyable) {
@@ -20,7 +22,10 @@ func (kv *ShardKV) proposeAndApply(op Op, replier replyable) {
 		replier.SetErr(ErrWrongLeader)
 		return
 	}
-	kv.logger.WithField("index", index).Debug("propose: start is ok")
+	kv.logger.WithFields(logrus.Fields{
+		"index": index,
+		"op":    fmt.Sprintf("%+v", op),
+	}).Debug("skv: propose: start is ok")
 	doneChan := make(chan opResult, 1)
 	lostLeaderChan := make(chan struct{}, 1)
 	// var runCheckLeader int32 = 1
@@ -28,7 +33,7 @@ func (kv *ShardKV) proposeAndApply(op Op, replier replyable) {
 		opRes := kv.applyEntry(index)
 		if !opRes.RequestInfo.Equals(&op.RequestInfo) {
 			lostLeaderChan <- struct{}{}
-			kv.logger.WithField("index", index).Warn("propose: different content on index")
+			kv.logger.WithField("index", index).Warn("skv: propose: different content on index")
 		} else {
 			doneChan <- opRes
 		}

@@ -2,6 +2,7 @@ package shardkv
 
 import (
 	"bytes"
+	"fmt"
 	"sync/atomic"
 
 	"6.824/common"
@@ -67,6 +68,8 @@ func (kv *ShardKV) evalOp(idx int, op Op) opResult {
 			atomic.StoreInt32(&kv.inSnapshot, 0)
 		}(idx, kv.dumpData())
 	}
+	kv.logger.WithField("op", fmt.Sprintf("%+v", op)).
+		WithField("res", fmt.Sprintf("%+v", res)).Debug("kvstore: opresult")
 	return res
 }
 
