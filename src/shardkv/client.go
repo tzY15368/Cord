@@ -104,6 +104,10 @@ func (ck *Clerk) Get(key string) string {
 					if reply.Err == ErrWrongGroup {
 						break
 					}
+					if reply.Err == ErrReConfigure {
+						ck.logger.Warn("sck: reconfigure, waiting 150ms")
+						time.Sleep(2 * pollCFGInterval)
+					}
 				}
 			}
 		}
@@ -161,6 +165,10 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 					}
 					if reply.Err == ErrWrongGroup {
 						break
+					}
+					if reply.Err == ErrReConfigure {
+						ck.logger.Warn("sck: reconfigure, waiting 150ms")
+						time.Sleep(2 * pollCFGInterval)
 					}
 				}
 			}

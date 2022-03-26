@@ -23,6 +23,7 @@ const (
 	ErrNoKey       = "ErrNoKey"
 	ErrWrongGroup  = "ErrWrongGroup"
 	ErrWrongLeader = "ErrWrongLeader"
+	ErrReConfigure = "ErrReconfigure"
 )
 
 const (
@@ -52,7 +53,7 @@ const (
 	OP_PUT
 	OP_APPEND
 	OP_CFG
-	OP_TRANS
+	OP_MIGRATE
 )
 
 type Err string
@@ -110,3 +111,12 @@ type CFGReply struct {
 
 func (cgr *CFGReply) SetValue(i string) {}
 func (cfg *CFGReply) SetErr(e Err)      { cfg.Err = e }
+
+type MigrateArgs struct {
+	Data map[string]string
+	common.RequestInfo
+}
+
+type MigrateReply struct {
+	Err Err
+}

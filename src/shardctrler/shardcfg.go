@@ -139,23 +139,35 @@ func NewDiffCfg(s string) *DiffCfg {
 	return cfg
 }
 
-// to me returns shards that are transferred to the given gid
-func (dc *DiffCfg) ToMe(gid int) []int {
+func (dc *DiffCfg) RelevantShards(gid int) []int {
 	var res []int
-	for shardKey := range dc.Data {
-		if dc.Data[shardKey].ToGID == gid {
+	for shardKey, v := range dc.Data {
+		if v.FromGID == gid || v.ToGID == gid {
 			res = append(res, shardKey)
 		}
 	}
 	return res
 }
 
-// from me returns shards that are transferred from the given gid
-func (dc *DiffCfg) FromMe(gid int) []int {
-	var res []int
+// to me returns shards that are transferred to the given gid
+// returns map of shards to from-gids
+func (dc *DiffCfg) ToMe(gid int) map[int]int {
+	res := make(map[int]int)
+	for shardKey := range dc.Data {
+		if dc.Data[shardKey].ToGID == gid {
+			res[shardKey] = dc.Data[shardKey].FromGID
+		}
+	}
+	return res
+}
+
+// from me returns shards that are transferred from the given gid.
+// returns map of shards to to-gids
+func (dc *DiffCfg) FromMe(gid int) map[int]int {
+	res := make(map[int]int)
 	for shardkey := range dc.Data {
 		if dc.Data[shardkey].FromGID == gid {
-			res = append(res, shardkey)
+			res[shardkey] = dc.Data[shardkey].ToGID
 		}
 	}
 	return res

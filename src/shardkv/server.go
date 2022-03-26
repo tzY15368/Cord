@@ -32,7 +32,7 @@ type ShardKV struct {
 	inSnapshot   int32
 	clientID     int64
 	requestID    int64
-	shardLocks   []struct{}
+	shardLocks   []int32
 	// Your definitions here.
 }
 
@@ -126,7 +126,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.data = make(map[string]string)
 	kv.clientID = nrand()
 	kv.requestID = 0
-	kv.shardLocks = make([]struct{}, shardctrler.NShards)
+	kv.shardLocks = make([]int32, shardctrler.NShards)
 	go kv.pollCFG()
 	go kv.applyMsgHandler()
 	return kv
