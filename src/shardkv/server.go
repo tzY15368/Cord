@@ -1,6 +1,7 @@
 package shardkv
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -74,9 +75,15 @@ func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
 		kv.logger.WithField("shard", args.Shard).Debug("skv: migrate: errkeynolock")
 		return
 	}
+	buf := new(bytes.Buffer)
+	encoder := labgob.NewEncoder(buf)
+	err := encoder.Encode(args.Data)
+	if err != nil {
+		panic(err)
+	}
 	op := Op{
 		OP_KEY:      fmt.Sprintf("%d", args.Shard),
-		OP_VALUE:    "",
+		OP_VALUE:    buf.String(),
 		RequestInfo: args.RequestInfo,
 	}
 
@@ -138,7 +145,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
-	kv.logger = logging.GetLogger("skv", common.ShardKVLogLevel).WithField("id", me)
+	kv.logger = logging.GetLogger("skv", common.ShardKVLogLevel).WithField("id-gid", fmt.Sprintf("%d-%d", me, gid))
 	kv.ctlClerk = shardctrler.MakeClerk(kv.ctrlers)
 	kv.notify = make(map[int]chan opResult)
 	kv.ack = make(map[int64]int64)

@@ -70,7 +70,17 @@ func (kv *ShardKV) evalOp(idx int, op *Op) opResult {
 		if atomic.LoadInt32(&kv.shardLocks[shardKey]) != 1 {
 			panic("errnolock")
 		}
+		buf := bytes.NewBuffer([]byte(op.OP_VALUE))
+		decoder := labgob.NewDecoder(buf)
+		var migrateMap map[string]string
+		err = decoder.Decode(&migrateMap)
+		if err != nil {
+			panic(err)
+		}
 
+		for key := range migrateMap {
+			kv.data[key] = migrateMap[key]
+		}
 	}
 	// snapshot
 	if kv.shouldIssueSnapshot() {

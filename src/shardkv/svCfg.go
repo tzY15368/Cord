@@ -108,6 +108,7 @@ func (kv *ShardKV) reconfig(old shardctrler.Config, _new shardctrler.Config) {
 
 	*/
 	time.Sleep(pollCFGInterval / 2 * 3)
+	kv.logger.Debug("skv: reconfig: starting reconfigure")
 	delta := _new.DiffOld(&old)
 	kv.logger.WithField("delta", fmt.Sprintf("%+v", delta)).Debug("skv: reconfig: got delta")
 	// 算diff，广播给本集群
