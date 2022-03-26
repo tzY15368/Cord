@@ -3,6 +3,7 @@ package shardkv
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"6.824/common"
 	"6.824/labgob"
@@ -64,6 +65,24 @@ func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	kv.proposeAndApply(op, reply)
 	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).
 		Debug("skv: putappend: result")
+}
+
+func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
+	// check if locked first, if not, reply with ErrNoLock
+	if atomic.LoadInt32(&kv.shardLocks[args.Shard]) == 0 {
+		reply.Err = ErrKeyNoLock
+		kv.logger.WithField("shard", args.Shard).Debug("skv: migrate: errkeynolock")
+		return
+	}
+	op := Op{
+		OP_KEY:      fmt.Sprintf("%d", args.Shard),
+		OP_VALUE:    "",
+		RequestInfo: args.RequestInfo,
+	}
+
+	kv.proposeAndApply(op, reply)
+	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).
+		Debug("skv: migrate: result")
 }
 
 //

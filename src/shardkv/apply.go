@@ -82,10 +82,8 @@ func (kv *ShardKV) applyMsgHandler() {
 			if op.OP_TYPE == OP_CFG {
 				// 给对应key加锁或解锁
 				opRes = kv.evalCFGOp(&op)
-			} else if op.OP_TYPE == OP_MIGRATE {
-
 			} else {
-				opRes = kv.evalOp(msg.CommandIndex, op)
+				opRes = kv.evalOp(msg.CommandIndex, &op)
 			}
 			kv.mu.Lock()
 			ch, ok := kv.notify[msg.CommandIndex]

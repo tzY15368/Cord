@@ -3,6 +3,7 @@ package shardkv
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"sync/atomic"
 
 	"6.824/common"
@@ -27,6 +28,7 @@ func (kv *ShardKV) shouldIssueSnapshot() bool {
 	return false
 }
 
+// isDuplicate not thread safe
 func (kv *ShardKV) isDuplicate(req common.RequestInfo) bool {
 	latestReqID, ok := kv.ack[req.ClientID]
 	if ok {
@@ -35,18 +37,18 @@ func (kv *ShardKV) isDuplicate(req common.RequestInfo) bool {
 	return false
 }
 
-func (kv *ShardKV) evalOp(idx int, op Op) opResult {
+func (kv *ShardKV) evalOp(idx int, op *Op) opResult {
 	res := opResult{
 		err:         OK,
 		RequestInfo: op.RequestInfo,
 	}
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
 	if kv.isDuplicate(op.RequestInfo) {
 		return res
 	} else {
 		kv.ack[op.RequestInfo.ClientID] = op.RequestInfo.RequestID
 	}
-	kv.mu.Lock()
-	defer kv.mu.Unlock()
 	switch op.OP_TYPE {
 	case OP_GET:
 		data, ok := kv.data[op.OP_KEY]
@@ -59,6 +61,16 @@ func (kv *ShardKV) evalOp(idx int, op Op) opResult {
 		kv.data[op.OP_KEY] = op.OP_VALUE
 	case OP_APPEND:
 		kv.data[op.OP_KEY] += op.OP_VALUE
+	case OP_MIGRATE:
+		//再次检查上锁
+		shardKey, err := strconv.Atoi(op.OP_KEY)
+		if err != nil {
+			panic(err)
+		}
+		if atomic.LoadInt32(&kv.shardLocks[shardKey]) != 1 {
+			panic("errnolock")
+		}
+
 	}
 	// snapshot
 	if kv.shouldIssueSnapshot() {

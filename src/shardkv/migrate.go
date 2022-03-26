@@ -10,10 +10,12 @@ func (kv *ShardKV) doMigrate(delta *shardctrler.DiffCfg, newCfg *shardctrler.Con
 	outGoingShards := delta.FromMe(kv.gid)
 	for shardKey, targetGID := range outGoingShards {
 		servers := newCfg.Groups[targetGID]
+		// 一整个组，需要找到leader（带缓存）
 		for _, server := range servers {
 			go func(svName string) {
 				args := MigrateArgs{
-					Data: make(map[string]string),
+					Data:  make(map[string]string),
+					Shard: shardKey,
 				}
 				kv.mu.Lock()
 				for key := range kv.data {
@@ -25,8 +27,7 @@ func (kv *ShardKV) doMigrate(delta *shardctrler.DiffCfg, newCfg *shardctrler.Con
 				reply := MigrateReply{}
 				kv.logger.WithField("len", len(args.Data)).
 					WithField("shard", shardKey).Debug("svCFG: migrate: moving length on key")
-				ok := kv.make_end(server).Call("", &args, &reply)
-				_ = ok
+				ok := kv.make_end(server).Call("ShardKV.Migrate", &args, &reply)
 			}(server)
 		}
 	}

@@ -24,6 +24,7 @@ const (
 	ErrWrongGroup  = "ErrWrongGroup"
 	ErrWrongLeader = "ErrWrongLeader"
 	ErrReConfigure = "ErrReconfigure"
+	ErrKeyNoLock   = "ErrKeyNoLock"
 )
 
 const (
@@ -113,10 +114,14 @@ func (cgr *CFGReply) SetValue(i string) {}
 func (cfg *CFGReply) SetErr(e Err)      { cfg.Err = e }
 
 type MigrateArgs struct {
-	Data map[string]string
+	Data  map[string]string
+	Shard int
 	common.RequestInfo
 }
 
 type MigrateReply struct {
 	Err Err
 }
+
+func (mgr *MigrateReply) SetValue(i string) {}
+func (mgr *MigrateReply) SetErr(e Err)      { mgr.Err = e }
