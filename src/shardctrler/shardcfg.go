@@ -154,6 +154,9 @@ func (dc *DiffCfg) RelevantShards(gid int) []int {
 func (dc *DiffCfg) ToMe(gid int) map[int]int {
 	res := make(map[int]int)
 	for shardKey := range dc.Data {
+		if dc.Data[shardKey].FromGID == 0 {
+			continue
+		}
 		if dc.Data[shardKey].ToGID == gid {
 			res[shardKey] = dc.Data[shardKey].FromGID
 		}
@@ -173,11 +176,16 @@ func (dc *DiffCfg) FromMe(gid int) map[int]int {
 	return res
 }
 
-func (cfg *Config) DiffOld(old *Config) *DiffCfg {
-	res := DiffCfg{}
-	for i, newGid := range old.Shards {
-		if cfg.Shards[i] != newGid {
-			res.Data[i] = DiffPair{FromGID: cfg.Shards[i], ToGID: newGid}
+func (new *Config) DiffOld(old *Config) *DiffCfg {
+	res := DiffCfg{
+		Data: make(map[int]DiffPair),
+	}
+	for i := range old.Shards {
+		if new.Shards[i] != old.Shards[i] {
+			res.Data[i] = DiffPair{
+				FromGID: old.Shards[i],
+				ToGID:   new.Shards[i],
+			}
 		}
 	}
 	return &res

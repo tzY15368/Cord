@@ -7,6 +7,7 @@ import (
 
 	"6.824/common"
 	"6.824/shardctrler"
+	"github.com/sirupsen/logrus"
 )
 
 // isKeyServed thread safe
@@ -26,12 +27,25 @@ func (kv *ShardKV) isKeyLocked(key string) bool {
 	return false
 }
 
+func (kv *ShardKV) cfgUpToDate(newCfgNum int) bool {
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	return kv.config.Num < newCfgNum
+}
+
 func (kv *ShardKV) evalCFGOp(op *Op) opResult {
-	_, cfgOp := loadReconfigString(op.OP_KEY)
+	version, cfgOp := loadReconfigString(op.OP_KEY)
 	delta := shardctrler.NewDiffCfg(op.OP_VALUE)
 	lockedShards := delta.RelevantShards(kv.gid)
-	kv.logger.WithField("lockedKeys", lockedShards)
-	for v := range lockedShards {
+	verb := "locked"
+	if cfgOp != shardctrler.CFG_LOCK {
+		verb = "unlocked"
+	}
+	kv.logger.WithFields(logrus.Fields{
+		"lockedKeys": lockedShards,
+		"version":    version,
+	}).Debug("evalCFGOP: " + verb + " keys")
+	for _, v := range lockedShards {
 		var swapped bool
 		if cfgOp == shardctrler.CFG_LOCK {
 			swapped = atomic.CompareAndSwapInt32(&kv.shardLocks[v], 0, 1)
@@ -107,9 +121,13 @@ func (kv *ShardKV) reconfig(old shardctrler.Config, _new shardctrler.Config) {
 
 
 	*/
-	time.Sleep(pollCFGInterval / 2 * 3)
+	// time.Sleep(pollCFGInterval / 2 * 3)
 	kv.logger.Debug("skv: reconfig: starting reconfigure")
 	delta := _new.DiffOld(&old)
+	kv.logger.WithFields(logrus.Fields{
+		"old": fmt.Sprintf("%+v", old),
+		"new": fmt.Sprintf("%+v", _new),
+	}).Debug("skv: reconfig: old and new")
 	kv.logger.WithField("delta", fmt.Sprintf("%+v", delta)).Debug("skv: reconfig: got delta")
 	// 算diff，广播给本集群
 	op := Op{
@@ -124,15 +142,15 @@ func (kv *ShardKV) reconfig(old shardctrler.Config, _new shardctrler.Config) {
 	reply := CFGReply{}
 	kv.proposeAndApply(op, &reply)
 	if reply.Err != OK {
+		if reply.Err == ErrWrongLeader {
+			kv.logger.Debug("skv: reconfig: not leader")
+			return
+		}
 		panic(reply.Err)
 	}
-	// drain bad data in kv.migratenotify
-	for len(kv.migrateNotify) != 0 {
-		select {
-		case <-kv.migrateNotify:
-		default:
-		}
-	}
+	kv.mu.Lock()
+	kv.migrateNotify[_new.Num] = make(chan int, shardctrler.NShards)
+	kv.mu.Unlock()
 
 	// do OP-MIGRATE
 	kv.doMigrate(delta, &_new)
@@ -153,4 +171,8 @@ func (kv *ShardKV) reconfig(old shardctrler.Config, _new shardctrler.Config) {
 	if reply.Err != OK {
 		panic(reply.Err)
 	}
+	kv.logger.WithFields(logrus.Fields{
+		"newCFG": _new.Num,
+		// "nextMigrateIndex": atomic.LoadInt32(&kv.nextMigrateIndex),
+	}).Debug("----------------reconfig round done-----------------")
 }

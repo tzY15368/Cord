@@ -38,6 +38,10 @@ type Op struct {
 	common.RequestInfo
 }
 
+// type OPCFGData struct {
+// 	Config
+// }
+
 type opResult struct {
 	data string
 	err  Err
@@ -114,8 +118,9 @@ func (cgr *CFGReply) SetValue(i string) {}
 func (cfg *CFGReply) SetErr(e Err)      { cfg.Err = e }
 
 type MigrateArgs struct {
-	Data  map[string]string
-	Shard int
+	Data      map[string]string
+	Shard     int
+	ConfigNum int
 	common.RequestInfo
 }
 

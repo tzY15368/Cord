@@ -26,7 +26,6 @@ type ShardKV struct {
 	maxraftstate  int // snapshot if log grows this big
 	ctlClerk      *shardctrler.Clerk
 	config        shardctrler.Config
-	configRWLock  sync.RWMutex
 	logger        *logrus.Entry
 	notify        map[int]chan opResult
 	ack           map[int64]int64
@@ -35,8 +34,7 @@ type ShardKV struct {
 	clientID      int64
 	requestID     int64
 	shardLocks    []int32
-	migrateNotify chan int
-	// Your definitions here.
+	migrateNotify map[int]chan int
 }
 
 func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
@@ -69,13 +67,36 @@ func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 		Debug("skv: putappend: result")
 }
 
+// dumpShardLocks not atomic, not thread safe
+func (kv *ShardKV) dumpShardLocks() []int {
+	res := make([]int, len(kv.shardLocks))
+	for i := 0; i < len(kv.shardLocks); i++ {
+		res[i] = int(atomic.LoadInt32(&kv.shardLocks[i]))
+	}
+	return res
+}
+
 func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
 	// check if locked first, if not, reply with ErrNoLock
 	if atomic.LoadInt32(&kv.shardLocks[args.Shard]) == 0 {
 		reply.Err = ErrKeyNoLock
-		kv.logger.WithField("shard", args.Shard).Debug("skv: migrate: errkeynolock")
+		kv.logger.WithFields(logrus.Fields{
+			"shard":      args.Shard,
+			"shardlocks": kv.dumpShardLocks(),
+		}).Debug("skv: migrate: errkeynolock")
 		return
 	}
+	// kv.mu.Lock()
+	// if args.ConfigNum > int(atomic.LoadInt32(&kv.nextMigrateIndex)) {
+	// 	kv.logger.WithFields(logrus.Fields{
+	// 		"inComingNum": args.ConfigNum,
+	// 		"kv.cfg.num":  kv.config.Num,
+	// 	}).Debug("skv: migrate: waiting for older migrate messages")
+	// 	reply.Err = ErrKeyNoLock
+	// 	kv.mu.Unlock()
+	// 	return
+	// }
+	// kv.mu.Unlock()
 	buf := new(bytes.Buffer)
 	encoder := labgob.NewEncoder(buf)
 	err := encoder.Encode(args.Data)
@@ -83,6 +104,7 @@ func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
 		panic(err)
 	}
 	op := Op{
+		OP_TYPE:     OP_MIGRATE,
 		OP_KEY:      fmt.Sprintf("%d", args.Shard),
 		OP_VALUE:    buf.String(),
 		RequestInfo: args.RequestInfo,
@@ -91,6 +113,7 @@ func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
 	kv.proposeAndApply(op, reply)
 	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).
 		Debug("skv: migrate: result")
+	kv.migrateNotify[args.ConfigNum] <- args.Shard
 }
 
 //
@@ -154,7 +177,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.clientID = nrand()
 	kv.requestID = 0
 	kv.shardLocks = make([]int32, shardctrler.NShards)
-	kv.migrateNotify = make(chan int, shardctrler.NShards)
+	kv.migrateNotify = make(map[int]chan int)
 	go kv.pollCFG()
 	go kv.applyMsgHandler()
 	return kv

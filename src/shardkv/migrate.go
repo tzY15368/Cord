@@ -32,12 +32,14 @@ func (kv *ShardKV) sendMigrateRPC(groupServers []string, args *MigrateArgs, repl
 
 func (kv *ShardKV) doMigrate(delta *shardctrler.DiffCfg, newCfg *shardctrler.Config) {
 	outGoingShards := delta.FromMe(kv.gid)
+	kv.logger.WithField("outboundMap", outGoingShards).Debug("svCFG: migrate: sending migrates")
 	var wg sync.WaitGroup
 	for shardKey, targetGID := range outGoingShards {
 		servers := newCfg.Groups[targetGID]
 		args := MigrateArgs{
-			Data:  make(map[string]string),
-			Shard: shardKey,
+			Data:      make(map[string]string),
+			Shard:     shardKey,
+			ConfigNum: newCfg.Num,
 		}
 		kv.mu.Lock()
 		for key := range kv.data {
@@ -60,11 +62,14 @@ func (kv *ShardKV) doMigrate(delta *shardctrler.DiffCfg, newCfg *shardctrler.Con
 		expectedIncomingShards := delta.ToMe(kv.gid)
 		kv.logger.WithField("incomingMap", expectedIncomingShards).Debug("svCFG: migrate: expecting migrates")
 		for len(expectedIncomingShards) != 0 {
-			doneShardOffset := <-kv.migrateNotify
+			doneShardOffset := <-kv.migrateNotify[newCfg.Num]
 			delete(expectedIncomingShards, doneShardOffset)
 		}
 		kv.logger.Debug("svCFG: migrate: incoming migrates done")
 		wg.Done()
 	}()
 	wg.Wait()
+	kv.logger.Debug("svCFG: migrate: done doMigrate")
+	// val := atomic.AddInt32(&kv.nextMigrateIndex, 1)
+	// kv.logger.WithField("new-nextMigrateIndex", val).Debug("svCFG: migrate: nexMigrateIndex at")
 }
