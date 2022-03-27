@@ -1,7 +1,6 @@
 package shardkv
 
 import (
-	"bytes"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -76,6 +75,7 @@ func (kv *ShardKV) dumpShardLocks() []int {
 	return res
 }
 
+// 变成拉数据，这里要填充kvstore数据到reply.data
 func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
 	// check if locked first, if not, reply with ErrNoLock
 	if atomic.LoadInt32(&kv.shardLocks[args.Shard]) == 0 {
@@ -97,23 +97,15 @@ func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
 	// 	return
 	// }
 	// kv.mu.Unlock()
-	buf := new(bytes.Buffer)
-	encoder := labgob.NewEncoder(buf)
-	err := encoder.Encode(args.Data)
-	if err != nil {
-		panic(err)
+	kv.mu.Lock()
+	for key := range kv.data {
+		if key2shard(key) == args.Shard {
+			reply.Data[key] = kv.data[key]
+		}
 	}
-	op := Op{
-		OP_TYPE:     OP_MIGRATE,
-		OP_KEY:      fmt.Sprintf("%d", args.Shard),
-		OP_VALUE:    buf.String(),
-		RequestInfo: args.RequestInfo,
-	}
-
-	kv.proposeAndApply(op, reply)
-	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).
-		Debug("skv: migrate: result")
+	kv.mu.Unlock()
 	kv.migrateNotify[args.ConfigNum] <- args.Shard
+	return
 }
 
 //

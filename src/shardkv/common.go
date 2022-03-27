@@ -118,14 +118,14 @@ func (cgr *CFGReply) SetValue(i string) {}
 func (cfg *CFGReply) SetErr(e Err)      { cfg.Err = e }
 
 type MigrateArgs struct {
-	Data      map[string]string
 	Shard     int
 	ConfigNum int
 	common.RequestInfo
 }
 
 type MigrateReply struct {
-	Err Err
+	Err  Err
+	Data map[string]string
 }
 
 func (mgr *MigrateReply) SetValue(i string) {}

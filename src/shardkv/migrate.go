@@ -1,11 +1,14 @@
 package shardkv
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 	"time"
 
+	"6.824/labgob"
 	"6.824/shardctrler"
+	"github.com/sirupsen/logrus"
 )
 
 // sendMigrateRPC thread safe, will block
@@ -31,41 +34,59 @@ func (kv *ShardKV) sendMigrateRPC(groupServers []string, args *MigrateArgs, repl
 }
 
 func (kv *ShardKV) doMigrate(delta *shardctrler.DiffCfg, newCfg *shardctrler.Config) {
-	outGoingShards := delta.FromMe(kv.gid)
-	kv.logger.WithField("outboundMap", outGoingShards).Debug("svCFG: migrate: sending migrates")
+	// pulled by others
+	outboundShards := delta.FromMe(kv.gid)
+	// pull from others
+	inboundShards := delta.ToMe(kv.gid)
+	kv.logger.WithFields(logrus.Fields{
+		"outbound": outboundShards,
+		"inbound":  inboundShards,
+	}).Debug("svCFG: migrate: preparing migrates")
 	var wg sync.WaitGroup
-	for shardKey, targetGID := range outGoingShards {
-		servers := newCfg.Groups[targetGID]
+	for shardKey, targetGID := range inboundShards {
 		args := MigrateArgs{
-			Data:      make(map[string]string),
 			Shard:     shardKey,
 			ConfigNum: newCfg.Num,
 		}
-		kv.mu.Lock()
-		for key := range kv.data {
-			if key2shard(key) == shardKey {
-				args.Data[key] = kv.data[key]
-			}
-		}
-		kv.mu.Unlock()
-		kv.logger.WithField("len", len(args.Data)).
-			WithField("shard", shardKey).Debug("svCFG: migrate: moved key")
 		wg.Add(1)
-		go func(servers []string, args *MigrateArgs) {
-			kv.sendMigrateRPC(servers, args, &MigrateReply{})
-			kv.logger.WithField("shard", args.Shard).Debug("svCFG: migrate: move ok")
+		go func(args *MigrateArgs, targetGid int) {
+			servers := newCfg.Groups[targetGid]
+			reply := &MigrateReply{Data: make(map[string]string)}
+
+			kv.sendMigrateRPC(servers, args, reply)
+
+			buf := new(bytes.Buffer)
+			encoder := labgob.NewEncoder(buf)
+			err := encoder.Encode(&reply.Data)
+			if err != nil {
+				panic(err)
+			}
+
+			op := Op{
+				OP_TYPE:     OP_MIGRATE,
+				OP_KEY:      fmt.Sprintf("%d", args.Shard),
+				OP_VALUE:    buf.String(),
+				RequestInfo: args.RequestInfo,
+			}
+			kv.proposeAndApply(op, reply)
+			kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).
+				Debug("skv: migratePull: result")
+
+			kv.logger.WithFields(logrus.Fields{
+				"shard": args.Shard,
+				"len":   len(reply.Data),
+			}).Debug("svCFG: migrate: pull ok")
 			wg.Done()
-		}(servers, &args)
+		}(&args, targetGID)
 	}
 	wg.Add(1)
 	go func() {
-		expectedIncomingShards := delta.ToMe(kv.gid)
-		kv.logger.WithField("incomingMap", expectedIncomingShards).Debug("svCFG: migrate: expecting migrates")
-		for len(expectedIncomingShards) != 0 {
+		for len(outboundShards) != 0 {
 			doneShardOffset := <-kv.migrateNotify[newCfg.Num]
-			delete(expectedIncomingShards, doneShardOffset)
+			delete(outboundShards, doneShardOffset)
+			kv.logger.WithField("shard", doneShardOffset).Debug("svCFG: migrate: pulled by")
 		}
-		kv.logger.Debug("svCFG: migrate: incoming migrates done")
+		kv.logger.Debug("svCFG: migrate: pull by others done")
 		wg.Done()
 	}()
 	wg.Wait()
