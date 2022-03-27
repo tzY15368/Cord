@@ -126,6 +126,13 @@ func (kv *ShardKV) reconfig(old shardctrler.Config, _new shardctrler.Config) {
 	if reply.Err != OK {
 		panic(reply.Err)
 	}
+	// drain bad data in kv.migratenotify
+	for len(kv.migrateNotify) != 0 {
+		select {
+		case <-kv.migrateNotify:
+		default:
+		}
+	}
 
 	// do OP-MIGRATE
 	kv.doMigrate(delta, &_new)
