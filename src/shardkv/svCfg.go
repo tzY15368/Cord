@@ -155,6 +155,7 @@ func (kv *ShardKV) reconfig(old shardctrler.Config, _new shardctrler.Config) {
 	// do OP-MIGRATE
 	kv.doMigrate(delta, &_new)
 	kv.logger.Debug("svCFG: migrate: done")
+	// end OP-MIGRATE
 
 	// migrate完成后广播给本集群
 	op = Op{
@@ -175,4 +176,21 @@ func (kv *ShardKV) reconfig(old shardctrler.Config, _new shardctrler.Config) {
 		"newCFG": _new.Num,
 		// "nextMigrateIndex": atomic.LoadInt32(&kv.nextMigrateIndex),
 	}).Debug("----------------reconfig round done-----------------")
+	/*
+		！！核心是不丢数据
+		v2: 直接发migrateRPC向对方group pull数据，
+		1- 本地shardkey加锁
+		2- 发出migraterpc
+		3- 对方shardkey加锁
+		4- 对方填充reply。data，
+		5- 对方解锁shardkey
+		5- 返回后本地导入数据，广播
+		6- 广播后给对方发ack，删shardkey
+		7- ack成功，本地解锁shardkey
+
+	*/
+
+	/*
+		config变化写进日志，收到的人都可以
+	*/
 }
