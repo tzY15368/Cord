@@ -3,7 +3,6 @@ package shardkv
 import (
 	"bytes"
 	"fmt"
-	"strconv"
 	"sync/atomic"
 
 	"6.824/common"
@@ -28,8 +27,8 @@ func (kv *ShardKV) shouldIssueSnapshot() bool {
 	return false
 }
 
-// isDuplicate not thread safe
-func (kv *ShardKV) isDuplicate(req common.RequestInfo) bool {
+// isDuplicateKVCMD not thread safe
+func (kv *ShardKV) isDuplicateKVCMD(req common.RequestInfo) bool {
 	latestReqID, ok := kv.ack[req.ClientID]
 	if ok {
 		return latestReqID >= req.RequestID
@@ -44,7 +43,7 @@ func (kv *ShardKV) evalOp(idx int, op *Op) opResult {
 	}
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
-	if kv.isDuplicate(op.RequestInfo) {
+	if kv.isDuplicateKVCMD(op.RequestInfo) {
 		return res
 	} else {
 		kv.ack[op.RequestInfo.ClientID] = op.RequestInfo.RequestID
@@ -61,26 +60,26 @@ func (kv *ShardKV) evalOp(idx int, op *Op) opResult {
 		kv.data[op.OP_KEY] = op.OP_VALUE
 	case OP_APPEND:
 		kv.data[op.OP_KEY] += op.OP_VALUE
-	case OP_MIGRATE:
-		//再次检查上锁
-		shardKey, err := strconv.Atoi(op.OP_KEY)
-		if err != nil {
-			panic(err)
-		}
-		if atomic.LoadInt32(&kv.shardLocks[shardKey]) != 1 {
-			panic("errnolock")
-		}
-		buf := bytes.NewBuffer([]byte(op.OP_VALUE))
-		decoder := labgob.NewDecoder(buf)
-		var migrateMap map[string]string
-		err = decoder.Decode(&migrateMap)
-		if err != nil {
-			panic(err)
-		}
+		// case OP_MIGRATE:
+		// 	//再次检查上锁
+		// 	shardKey, err := strconv.Atoi(op.OP_KEY)
+		// 	if err != nil {
+		// 		panic(err)
+		// 	}
+		// 	if atomic.LoadInt32(&kv.shardLocks[shardKey]) != 1 {
+		// 		panic("errnolock")
+		// 	}
+		// 	buf := bytes.NewBuffer([]byte(op.OP_VALUE))
+		// 	decoder := labgob.NewDecoder(buf)
+		// 	var migrateMap map[string]string
+		// 	err = decoder.Decode(&migrateMap)
+		// 	if err != nil {
+		// 		panic(err)
+		// 	}
 
-		for key := range migrateMap {
-			kv.data[key] = migrateMap[key]
-		}
+		// 	for key := range migrateMap {
+		// 		kv.data[key] = migrateMap[key]
+		// 	}
 	}
 	// snapshot
 	if kv.shouldIssueSnapshot() {

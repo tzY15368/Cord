@@ -12,7 +12,7 @@ func (kv *ShardKV) proposeAndApply(op Op, replier replyable) {
 	// 1: 如果是CFG，直接进入start
 	// 2:检查是否是正确的group
 	var wrongSv bool
-	if op.OP_TYPE == OP_CFG {
+	if op.OP_TYPE == OP_NEWCONFIG {
 		goto DirectStart
 	}
 	wrongSv = !kv.isKeyServed(op.OP_KEY)
@@ -75,13 +75,17 @@ func (kv *ShardKV) applyEntry(index int) opResult {
 }
 
 func (kv *ShardKV) applyMsgHandler() {
+
+	// applyCh内拿到的消息是有序的！！
 	for msg := range kv.applyCh {
 		if msg.CommandValid {
 			op := msg.Command.(Op)
 			var opRes opResult
-			if op.OP_TYPE == OP_CFG {
+			if op.OP_TYPE == OP_NEWCONFIG {
 				// 给对应key加锁或解锁
-				opRes = kv.evalCFGOp(&op)
+				opRes = kv.evalCFGOP(&op)
+			} else if op.OP_TYPE == OP_TRANSFER {
+				opRes = kv.evalTransferOP(&op)
 			} else {
 				opRes = kv.evalOp(msg.CommandIndex, &op)
 			}

@@ -24,6 +24,28 @@ type Config struct {
 // 返回diff：rebalance之前某个shardidx被分配到某个gid
 // 把shard分到group头上，需要注意group里可能有新进来的
 // 之前shard里没有的内容，也可能会少内容
+
+func LoadCFG(data string) Config {
+	cfg := Config{}
+	decoder := labgob.NewDecoder(bytes.NewBuffer([]byte(data)))
+	err := decoder.Decode(&cfg)
+	if err != nil {
+		panic(err)
+	}
+	return cfg
+}
+
+func (cfg *Config) Dump() string {
+
+	buf := new(bytes.Buffer)
+	encoder := labgob.NewEncoder(buf)
+	err := encoder.Encode(cfg)
+	if err != nil {
+		panic(err)
+	}
+	return buf.String()
+}
+
 func (cfg *Config) rebalance() /*map[int]int*/ {
 	if len(cfg.Groups) == 0 {
 		for i := range cfg.Shards {
@@ -137,6 +159,16 @@ func NewDiffCfg(s string) *DiffCfg {
 		panic(err)
 	}
 	return cfg
+}
+
+func (dc *DiffCfg) IrrelevantShards(gid int) []int {
+	var res []int
+	for i := 0; i < NShards; i++ {
+		if _, ok := dc.Data[i]; !ok {
+			res = append(res, i)
+		}
+	}
+	return res
 }
 
 func (dc *DiffCfg) RelevantShards(gid int) []int {

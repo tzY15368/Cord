@@ -57,9 +57,10 @@ const (
 	OP_GET = iota
 	OP_PUT
 	OP_APPEND
-	OP_CFG
-	OP_MIGRATE
-	OP_NOOP
+	//OP_CFG
+	//OP_MIGRATE
+	OP_NEWCONFIG
+	OP_TRANSFER
 )
 
 type Err string
@@ -131,3 +132,10 @@ type MigrateReply struct {
 
 func (mgr *MigrateReply) SetValue(i string) {}
 func (mgr *MigrateReply) SetErr(e Err)      { mgr.Err = e }
+
+type internalReply struct {
+	Err Err
+}
+
+func (itr *internalReply) SetValue(i string) {}
+func (itr *internalReply) SetErr(e Err)      { itr.Err = e }

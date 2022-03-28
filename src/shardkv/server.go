@@ -15,25 +15,26 @@ import (
 )
 
 type ShardKV struct {
-	mu            sync.RWMutex
-	me            int
-	rf            *raft.Raft
-	applyCh       chan raft.ApplyMsg
-	make_end      func(string) *labrpc.ClientEnd
-	gid           int
-	ctrlers       []*labrpc.ClientEnd
-	maxraftstate  int // snapshot if log grows this big
-	ctlClerk      *shardctrler.Clerk
-	config        shardctrler.Config
-	logger        *logrus.Entry
-	notify        map[int]chan opResult
-	ack           map[int64]int64
-	data          map[string]string
-	inSnapshot    int32
-	clientID      int64
-	requestID     int64
-	shardLocks    []int32
-	migrateNotify map[int]chan int
+	mu              sync.RWMutex
+	me              int
+	rf              *raft.Raft
+	applyCh         chan raft.ApplyMsg
+	make_end        func(string) *labrpc.ClientEnd
+	gid             int
+	ctrlers         []*labrpc.ClientEnd
+	maxraftstate    int // snapshot if log grows this big
+	ctlClerk        *shardctrler.Clerk
+	config          shardctrler.Config
+	logger          *logrus.Entry
+	notify          map[int]chan opResult
+	ack             map[int64]int64
+	data            map[string]string
+	inSnapshot      int32
+	clientID        int64
+	requestID       int64
+	shardLocks      []int32
+	migrateNotify   map[int]chan int
+	shardCFGVersion []int32
 }
 
 func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
@@ -169,6 +170,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.clientID = nrand()
 	kv.requestID = 0
 	kv.shardLocks = make([]int32, shardctrler.NShards)
+	kv.shardCFGVersion = make([]int32, shardctrler.NShards)
 	kv.migrateNotify = make(map[int]chan int)
 	go kv.pollCFG()
 	go kv.applyMsgHandler()
