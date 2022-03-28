@@ -183,14 +183,9 @@ func (kv *ShardKV) reconfig(old shardctrler.Config, _new shardctrler.Config) {
 		2- 发出migraterpc
 		3- 对方shardkey加锁
 		4- 对方填充reply。data，
-		5- 对方解锁shardkey
-		5- 返回后本地导入数据，广播
+		5- 解锁shardkey
+		5- 返回后本地导入数据，解锁shardkey，广播
 		6- 广播后给对方发ack，删shardkey
-		7- ack成功，本地解锁shardkey
 
-	*/
-
-	/*
-		config变化写进日志，收到的人都可以
 	*/
 }

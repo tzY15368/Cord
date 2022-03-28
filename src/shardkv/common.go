@@ -59,6 +59,7 @@ const (
 	OP_APPEND
 	OP_CFG
 	OP_MIGRATE
+	OP_NOOP
 )
 
 type Err string
