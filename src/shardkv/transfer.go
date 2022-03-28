@@ -91,8 +91,8 @@ func (kv *ShardKV) handleTransfer(pullTarget map[int]int, newCfg shardctrler.Con
 //
 // transferCFGIndex决定version[shard]可能的最大值
 // kv.config.num决定transferCFGIndex可能的最大值
-// server impl：如果shard的cfgversion小于当前transferCFGIndex：返回ErrReconfigure；
-// 如果等于，用key2shard查自己到底现在serve不serve这个key
+// // server impl：如果shard的cfgversion小于当前transferCFGIndex：返回ErrReconfigure；
+// // 如果等于，用key2shard查自己到底现在serve不serve这个key
 
 func (kv *ShardKV) evalTransferOP(op *Op) opResult {
 	cfg := shardctrler.LoadCFG(op.OP_KEY)

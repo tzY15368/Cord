@@ -36,6 +36,7 @@ func (kv *ShardKV) evalCFGOP(op *Op) opResult {
 	}
 	kv.config = cfg
 	diff := cfg.DiffOld(&oldConfig)
+	tome := diff.ToMe(kv.gid)
 	// irrelevantShards := diff.IrrelevantShards(kv.gid)
 	// for _, shard := range irrelevantShards {
 	// 	kv.shardCFGVersion[shard] = int32(cfg.Num)
@@ -46,7 +47,6 @@ func (kv *ShardKV) evalCFGOP(op *Op) opResult {
 	// 加完锁不能只leader发op-transfer，
 	// 因为如果在等对方返回的时候失去了leader数据就丢了，且无法恢复
 	// 只能一个group里所有人都给目标机器发
-	tome := diff.ToMe(kv.gid)
 	go kv.handleTransfer(tome, cfg)
 	return opResult{
 		err:         OK,
