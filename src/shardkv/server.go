@@ -82,7 +82,6 @@ func (kv *ShardKV) dumpShardVersion() []int {
 
 // 变成拉数据，这里要填充kvstore数据到reply.data
 func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
-
 	if !kv.shardVersionIsNew(args.Shard) || int32(args.ConfigNum) > atomic.LoadInt32(&kv.maxCFGVersion) {
 		reply.Err = ErrReConfigure
 		kv.logger.WithFields(logrus.Fields{
@@ -103,6 +102,7 @@ func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
 	// 	return
 	// }
 	// kv.mu.Unlock()
+	reply.Data = make(map[string]string)
 	kv.mu.Lock()
 	for key := range kv.data {
 		if key2shard(key) == args.Shard {

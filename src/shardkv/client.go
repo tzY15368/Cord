@@ -101,7 +101,7 @@ func (ck *Clerk) Get(key string) string {
 						ck.mu.Unlock()
 						continue
 					}
-					if reply.Err == ErrWrongGroup {
+					if reply.Err == ErrWrongGroup || !ok {
 						break
 					}
 					if reply.Err == ErrReConfigure {
@@ -166,7 +166,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 						ck.mu.Unlock()
 						continue
 					}
-					if reply.Err == ErrWrongGroup {
+					if reply.Err == ErrWrongGroup || !ok {
 						break
 					}
 					if reply.Err == ErrReConfigure {

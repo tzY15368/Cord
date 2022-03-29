@@ -68,7 +68,7 @@ func (kv *ShardKV) evalCFGOP(op *Op) opResult {
 	// 加完锁不能只leader发op-transfer，
 	// 因为如果在等对方返回的时候失去了leader数据就丢了，且无法恢复
 	// 只能一个group里所有人都给目标机器发
-	go kv.handleTransfer(tome, cfg)
+	go kv.handleTransfer(tome, oldConfig, cfg)
 	return opResult{
 		err:         OK,
 		RequestInfo: op.RequestInfo,

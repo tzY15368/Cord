@@ -16,6 +16,7 @@ import (
 // sendMigrateRPC thread safe, will block
 func (kv *ShardKV) sendMigrateRPC(groupServers []string, args *MigrateArgs, reply *MigrateReply) {
 	// 没做groupLeader缓存
+	kv.logger.WithField("servers", groupServers).Debug("skv: sendMigrate: params")
 	for {
 		for _, server := range groupServers {
 		Retry:
@@ -33,30 +34,36 @@ func (kv *ShardKV) sendMigrateRPC(groupServers []string, args *MigrateArgs, repl
 				kv.logger.WithField("err", reply.Err).Debug("skv: sendMigrateRPC: reply=false")
 			}
 		}
-		kv.logger.WithField("reply", fmt.Sprintf("%+v", reply)).Debug("skv: sendMigrateRPC: round failed, restarting after 100ms")
+		kv.logger.WithFields(logrus.Fields{
+			"reply": fmt.Sprintf("%+v", reply),
+		}).Warn("skv: sendMigrateRPC: round failed, restarting after 100ms")
 		time.Sleep(100 * time.Millisecond)
 	}
 }
 
-func (kv *ShardKV) handleTransfer(pullTarget map[int]int, newCfg shardctrler.Config) {
+func (kv *ShardKV) handleTransfer(pullTarget map[int]int, oldCfg shardctrler.Config, newCfg shardctrler.Config) {
 	// 如果对方config没那么新， 会无限重试，不要紧
 	var wg sync.WaitGroup
+	var mu = new(sync.Mutex)
 	newData := make(map[string]string)
+	kv.logger.WithField("pullTargets", pullTarget).Debug("svCFG: migrate: start pull")
 	for shardKey, targetGID := range pullTarget {
-		args := MigrateArgs{
+		_args := MigrateArgs{
 			Shard:     shardKey,
 			ConfigNum: newCfg.Num,
 		}
 		wg.Add(1)
-		go func(args *MigrateArgs, gid int) {
-			servers := newCfg.Groups[gid]
+		go func(args MigrateArgs, gid int) {
+			servers := oldCfg.Groups[gid]
 			reply := &MigrateReply{Data: make(map[string]string)}
-			kv.sendMigrateRPC(servers, args, reply)
+			kv.sendMigrateRPC(servers, &args, reply)
+			mu.Lock()
 			for key := range reply.Data {
 				newData[key] = reply.Data[key]
 			}
+			mu.Unlock()
 			wg.Done()
-		}(&args, targetGID)
+		}(_args, targetGID)
 	}
 	wg.Wait()
 

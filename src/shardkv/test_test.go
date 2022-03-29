@@ -103,6 +103,7 @@ func TestStaticShards(t *testing.T) {
 }
 
 func TestJoinLeave(t *testing.T) {
+	logger := logging.GetLogger("skv", logrus.DebugLevel)
 	fmt.Printf("Test: join then leave ...\n")
 
 	cfg := make_config(t, 3, false, -1)
@@ -123,7 +124,6 @@ func TestJoinLeave(t *testing.T) {
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
-
 	cfg.join(1)
 
 	for i := 0; i < n; i++ {
@@ -132,7 +132,8 @@ func TestJoinLeave(t *testing.T) {
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
-
+	logger.Debug("___________________________________")
+	fmt.Println("---------------------")
 	cfg.leave(0)
 
 	for i := 0; i < n; i++ {
@@ -142,10 +143,13 @@ func TestJoinLeave(t *testing.T) {
 		va[i] += x
 	}
 
+	logger.Debug("-----------------------------------")
 	// allow time for shards to transfer.
 	time.Sleep(1 * time.Second)
-
+	logger.Debug("====================================")
 	cfg.checklogs()
+	fmt.Println("~~~~~~~~~~~~~~~~~~~~~")
+	logger.Debug("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	cfg.ShutdownGroup(0)
 
 	for i := 0; i < n; i++ {
