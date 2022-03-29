@@ -98,6 +98,10 @@ func (kv *ShardKV) dumpData() *[]byte {
 	if err != nil {
 		panic(err)
 	}
+	err = encoder.Encode(&kv.config)
+	if err != nil {
+		panic(err)
+	}
 	by := buf.Bytes()
 	return &by
 }
@@ -124,6 +128,10 @@ func (kv *ShardKV) loadSnapshot(data []byte) {
 		panic(err)
 	}
 	err = decoder.Decode(&kv.maxTransferVersion)
+	if err != nil {
+		panic(err)
+	}
+	err = decoder.Decode(&kv.config)
 	if err != nil {
 		panic(err)
 	}
