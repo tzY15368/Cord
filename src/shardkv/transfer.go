@@ -22,9 +22,11 @@ func (kv *ShardKV) sendMigrateRPC(groupServers []string, args *MigrateArgs, repl
 			ok := kv.make_end(server).Call("ShardKV.Migrate", args, reply)
 			if ok && reply.Err == OK {
 				return
-				// TODO: HOW DOES THIS WORK?
-			} else if reply.Err == ErrKeyNoLock {
-				kv.logger.Debug("skv: sendMigrate: error no lock, sleeping 75ms")
+			} else if reply.Err == ErrReConfigure {
+				kv.logger.WithFields(logrus.Fields{
+					"shard": args.Shard,
+					"num":   args.ConfigNum,
+				}).Debug("skv: sendMigrate: error-re-configure, sleeping 75ms")
 				time.Sleep(pollCFGInterval)
 				goto Retry
 			} else {
@@ -67,7 +69,11 @@ func (kv *ShardKV) handleTransfer(pullTarget map[int]int, newCfg shardctrler.Con
 
 	buf := new(bytes.Buffer)
 	encoder := labgob.NewEncoder(buf)
-	err := encoder.Encode(&newData)
+	err := encoder.Encode(&pullTarget)
+	if err != nil {
+		panic(err)
+	}
+	err = encoder.Encode(&newData)
 	if err != nil {
 		panic(err)
 	}
@@ -83,9 +89,14 @@ func (kv *ShardKV) handleTransfer(pullTarget map[int]int, newCfg shardctrler.Con
 	}
 	reply := internalReply{}
 	kv.proposeAndApply(op, &reply)
-	kv.logger.WithFields(logrus.Fields{
-		"reply": reply,
-	}).Debug("svCFG: handleTransfer: proposed")
+	if reply.Err == OK {
+
+		kv.logger.WithFields(logrus.Fields{
+			"reply": reply,
+		}).Debug("svCFG: handleTransfer: proposed")
+	} else if reply.Err == ErrSeenTransfer {
+		panic("invalid seq trans")
+	}
 }
 
 //
@@ -96,5 +107,43 @@ func (kv *ShardKV) handleTransfer(pullTarget map[int]int, newCfg shardctrler.Con
 
 func (kv *ShardKV) evalTransferOP(op *Op) opResult {
 	cfg := shardctrler.LoadCFG(op.OP_KEY)
+	if cfg.Num <= int(atomic.LoadInt32(&kv.maxTransferVersion)) {
+		kv.logger.Warn("ignoring old transfer msg, possible restart")
+		return opResult{
+			err: ErrSeenTransfer,
+		}
+	} else {
+		swapped := atomic.CompareAndSwapInt32(&kv.maxTransferVersion, int32(cfg.Num-1), int32(cfg.Num))
+		if !swapped {
+			panic("no swap")
+		}
+	}
 
+	decoder := labgob.NewDecoder(bytes.NewBuffer([]byte(op.OP_VALUE)))
+	var pullTarget map[int]int
+	var pullData map[string]string
+	err := decoder.Decode(&pullTarget)
+	if err != nil {
+		panic(err)
+	}
+	err = decoder.Decode(&pullData)
+	if err != nil {
+		panic(err)
+	}
+	for shardKey := range pullTarget {
+		swapped := atomic.CompareAndSwapInt32(&kv.shardCFGVersion[shardKey], int32(cfg.Num-1), int32(cfg.Num))
+		if !swapped {
+			kv.logger.Panic("no swap", cfg.Num, atomic.LoadInt32(&kv.shardCFGVersion[shardKey]))
+		}
+	}
+	kv.logger.WithField("version", kv.dumpShardVersion()).Debug("svCFG: evalCFG: updated version")
+	kv.mu.Lock()
+	for key := range pullData {
+		kv.data[key] = pullData[key]
+	}
+	kv.mu.Unlock()
+	return opResult{
+		err:         OK,
+		RequestInfo: op.RequestInfo,
+	}
 }

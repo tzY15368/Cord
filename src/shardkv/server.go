@@ -15,26 +15,30 @@ import (
 )
 
 type ShardKV struct {
-	mu              sync.RWMutex
-	me              int
-	rf              *raft.Raft
-	applyCh         chan raft.ApplyMsg
-	make_end        func(string) *labrpc.ClientEnd
-	gid             int
-	ctrlers         []*labrpc.ClientEnd
-	maxraftstate    int // snapshot if log grows this big
-	ctlClerk        *shardctrler.Clerk
-	config          shardctrler.Config
-	logger          *logrus.Entry
-	notify          map[int]chan opResult
-	ack             map[int64]int64
-	data            map[string]string
-	inSnapshot      int32
-	clientID        int64
-	requestID       int64
-	shardLocks      []int32
-	migrateNotify   map[int]chan int
-	shardCFGVersion []int32
+	mu                 sync.RWMutex
+	me                 int
+	rf                 *raft.Raft
+	applyCh            chan raft.ApplyMsg
+	make_end           func(string) *labrpc.ClientEnd
+	gid                int
+	ctrlers            []*labrpc.ClientEnd
+	maxraftstate       int // snapshot if log grows this big
+	ctlClerk           *shardctrler.Clerk
+	config             shardctrler.Config
+	logger             *logrus.Entry
+	notify             map[int]chan opResult
+	ack                map[int64]int64
+	data               map[string]string
+	inSnapshot         int32
+	clientID           int64
+	requestID          int64
+	shardLocks         []int32
+	migrateNotify      map[int]chan int
+	shardCFGVersion    []int32
+	maxCFGVersion      int32
+	maxTransferVersion int32
+	// map[版本号]数据
+	outboundData map[int]map[string]string
 }
 
 func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) {
@@ -68,23 +72,24 @@ func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 }
 
 // dumpShardLocks not atomic, not thread safe
-func (kv *ShardKV) dumpShardLocks() []int {
-	res := make([]int, len(kv.shardLocks))
-	for i := 0; i < len(kv.shardLocks); i++ {
-		res[i] = int(atomic.LoadInt32(&kv.shardLocks[i]))
+func (kv *ShardKV) dumpShardVersion() []int {
+	res := make([]int, len(kv.shardCFGVersion))
+	for i := 0; i < len(kv.shardCFGVersion); i++ {
+		res[i] = int(atomic.LoadInt32(&kv.shardCFGVersion[i]))
 	}
 	return res
 }
 
 // 变成拉数据，这里要填充kvstore数据到reply.data
 func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
-	// check if locked first, if not, reply with ErrNoLock
-	if atomic.LoadInt32(&kv.shardLocks[args.Shard]) == 0 {
-		reply.Err = ErrKeyNoLock
+
+	if !kv.shardVersionIsNew(args.Shard) || int32(args.ConfigNum) > atomic.LoadInt32(&kv.maxCFGVersion) {
+		reply.Err = ErrReConfigure
 		kv.logger.WithFields(logrus.Fields{
-			"shard":      args.Shard,
-			"shardlocks": kv.dumpShardLocks(),
-		}).Debug("skv: migrate: errkeynolock")
+			"configNum": args.ConfigNum,
+			"shard":     args.Shard,
+			"version":   kv.dumpShardVersion(),
+		}).Debug("skv: migrate: version is not new, retry later")
 		return
 	}
 	// kv.mu.Lock()
@@ -105,7 +110,7 @@ func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
 		}
 	}
 	kv.mu.Unlock()
-	kv.migrateNotify[args.ConfigNum] <- args.Shard
+	reply.Err = OK
 	return
 }
 
@@ -162,16 +167,14 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
-	kv.logger = logging.GetLogger("skv", common.ShardKVLogLevel).WithField("id-gid", fmt.Sprintf("%d-%d", me, gid))
+	kv.logger = logging.GetLogger("skv", common.ShardKVLogLevel).WithField("id", fmt.Sprintf("%d-%d", gid, me))
 	kv.ctlClerk = shardctrler.MakeClerk(kv.ctrlers)
 	kv.notify = make(map[int]chan opResult)
 	kv.ack = make(map[int64]int64)
 	kv.data = make(map[string]string)
 	kv.clientID = nrand()
 	kv.requestID = 0
-	kv.shardLocks = make([]int32, shardctrler.NShards)
 	kv.shardCFGVersion = make([]int32, shardctrler.NShards)
-	kv.migrateNotify = make(map[int]chan int)
 	go kv.pollCFG()
 	go kv.applyMsgHandler()
 	return kv

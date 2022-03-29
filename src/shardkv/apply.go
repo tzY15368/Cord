@@ -11,18 +11,13 @@ import (
 func (kv *ShardKV) proposeAndApply(op Op, replier replyable) {
 	// 1: 如果是CFG，直接进入start
 	// 2:检查是否是正确的group
-	var wrongSv bool
-	if op.OP_TYPE == OP_NEWCONFIG {
+	var _err Err
+	if op.OP_TYPE == OP_NEWCONFIG || op.OP_TYPE == OP_TRANSFER {
 		goto DirectStart
 	}
-	wrongSv = !kv.isKeyServed(op.OP_KEY)
-	if wrongSv {
-		replier.SetErr(ErrWrongGroup)
-		return
-	}
-
-	if kv.isKeyLocked(op.OP_KEY) {
-		replier.SetErr(ErrReConfigure)
+	_err = kv.shouldServeKey(op.OP_KEY)
+	if _err != OK {
+		replier.SetErr(_err)
 		return
 	}
 

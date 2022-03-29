@@ -113,9 +113,12 @@ func (ck *Clerk) Get(key string) string {
 		}
 		time.Sleep(pollCFGInterval)
 		// ask controler for the latest configuration.
+		cfg := ck.sm.Query(-1)
 		ck.mu.Lock()
-		ck.config = ck.sm.Query(-1)
-		ck.logger.WithField("config", ck.config).Debug("sck: get: got new config")
+		if cfg.Num != ck.config.Num {
+			ck.config = cfg
+			ck.logger.WithField("config", ck.config).Debug("sck: get: got new config")
+		}
 		ck.mu.Unlock()
 	}
 
@@ -175,9 +178,12 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		}
 		time.Sleep(pollCFGInterval)
 		// ask controler for the latest configuration.
+		cfg := ck.sm.Query(-1)
 		ck.mu.Lock()
-		ck.config = ck.sm.Query(-1)
-		ck.logger.WithField("config", ck.config).Debug("sck: putappend: got new config")
+		if cfg.Num != ck.config.Num {
+			ck.config = cfg
+			ck.logger.WithField("config", ck.config).Debug("sck: get: got new config")
+		}
 		ck.mu.Unlock()
 	}
 }

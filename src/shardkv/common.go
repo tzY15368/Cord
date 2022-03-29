@@ -19,12 +19,14 @@ import (
 //
 
 const (
-	OK             = "OK"
-	ErrNoKey       = "ErrNoKey"
-	ErrWrongGroup  = "ErrWrongGroup"
-	ErrWrongLeader = "ErrWrongLeader"
-	ErrReConfigure = "ErrReconfigure"
-	ErrKeyNoLock   = "ErrKeyNoLock"
+	OK              = "OK"
+	ErrNoKey        = "ErrNoKey"
+	ErrWrongGroup   = "ErrWrongGroup"
+	ErrWrongLeader  = "ErrWrongLeader"
+	ErrReConfigure  = "ErrReconfigure"
+	ErrKeyNoLock    = "ErrKeyNoLock"
+	ErrSeenConfig   = "ErrSeenConfig"
+	ErrSeenTransfer = "ErrSeenTrans"
 )
 
 const (

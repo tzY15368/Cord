@@ -1,15 +1,20 @@
 package shardkv
 
-import "6.824/porcupine"
-import "6.824/models"
-import "testing"
-import "strconv"
-import "time"
-import "fmt"
-import "sync/atomic"
-import "sync"
-import "math/rand"
-import "io/ioutil"
+import (
+	"fmt"
+	"io/ioutil"
+	"math/rand"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"6.824/logging"
+	"6.824/models"
+	"6.824/porcupine"
+	"github.com/sirupsen/logrus"
+)
 
 const linearizabilityCheckTimeout = 1 * time.Second
 
@@ -23,7 +28,9 @@ func check(t *testing.T, ck *Clerk, key string, value string) {
 //
 // test static 2-way sharding, without shard movement.
 //
+
 func TestStaticShards(t *testing.T) {
+	logger := logging.GetLogger("skv", logrus.DebugLevel)
 	fmt.Printf("Test: static shards ...\n")
 
 	cfg := make_config(t, 3, false, -1)
@@ -49,6 +56,7 @@ func TestStaticShards(t *testing.T) {
 	// make sure that the data really is sharded by
 	// shutting down one shard and checking that some
 	// Get()s don't succeed.
+	logger.Debug("----------------------------------------")
 	cfg.ShutdownGroup(1)
 	cfg.checklogs() // forbid snapshots
 
@@ -84,7 +92,7 @@ func TestStaticShards(t *testing.T) {
 	if ndone != 5 {
 		t.Fatalf("expected 5 completions with one shard dead; got %v\n", ndone)
 	}
-
+	logger.Debug("================================")
 	// bring the crashed shard/group back to life.
 	cfg.StartGroup(1)
 	for i := 0; i < n; i++ {
