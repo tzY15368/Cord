@@ -32,8 +32,6 @@ type ShardKV struct {
 	inSnapshot         int32
 	clientID           int64
 	requestID          int64
-	shardLocks         []int32
-	migrateNotify      map[int]chan int
 	shardCFGVersion    []int32
 	maxCFGVersion      int32
 	maxTransferVersion int32
@@ -91,17 +89,7 @@ func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
 		}).Debug("skv: migrate: version is not new, retry later")
 		return
 	}
-	// kv.mu.Lock()
-	// if args.ConfigNum > int(atomic.LoadInt32(&kv.nextMigrateIndex)) {
-	// 	kv.logger.WithFields(logrus.Fields{
-	// 		"inComingNum": args.ConfigNum,
-	// 		"kv.cfg.num":  kv.config.Num,
-	// 	}).Debug("skv: migrate: waiting for older migrate messages")
-	// 	reply.Err = ErrKeyNoLock
-	// 	kv.mu.Unlock()
-	// 	return
-	// }
-	// kv.mu.Unlock()
+
 	reply.Data = make(map[string]string)
 	kv.mu.Lock()
 	for key := range kv.data {
@@ -111,7 +99,6 @@ func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
 	}
 	kv.mu.Unlock()
 	reply.Err = OK
-	return
 }
 
 //

@@ -121,8 +121,6 @@ func (ck *Clerk) Get(key string) string {
 		}
 		ck.mu.Unlock()
 	}
-
-	return ""
 }
 
 //
