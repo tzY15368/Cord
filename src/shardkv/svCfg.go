@@ -63,7 +63,7 @@ func (kv *ShardKV) evalCFGOP(op *Op) opResult {
 			// 	kv.logger.Panic("no swap", cfg.Num, atomic.LoadInt32(&kv.shardCFGVersion[i]))
 			// }
 			if kv.shardCFGVersion[i] != int32(cfg.Num)-1 {
-				kv.logger.Panic("no swap", kv.shardCFGVersion[i], int32(cfg.Num))
+				kv.logger.Panic("skv: svCFG: no swap", kv.shardCFGVersion[i], int32(cfg.Num))
 			} else {
 				kv.shardCFGVersion[i] = int32(cfg.Num)
 			}
@@ -82,20 +82,31 @@ func (kv *ShardKV) evalCFGOP(op *Op) opResult {
 	}
 }
 
+// cfgVerIsAligned not thread safe
+func (kv *ShardKV) cfgVerIsAligned(ver int32) bool {
+	for _, val := range kv.shardCFGVersion {
+		if val != ver {
+			return false
+		}
+	}
+	return true
+}
+
 func (kv *ShardKV) pollCFG() {
 	for {
+		time.Sleep(100 * time.Millisecond)
 		kv.mu.Lock()
 		oldCfg := kv.config
+		for !kv.cfgVerIsAligned(int32(oldCfg.Num)) {
+			kv.cfgVerAlignedCond.Wait()
+		}
 		kv.mu.Unlock()
 		cfg := kv.ctlClerk.Query(oldCfg.Num + 1)
 		if cfg.Num != oldCfg.Num {
 			kv.logger.WithField("old", oldCfg.Num).
 				WithField("new", cfg.Num).Debug("skv: poll: found new cfg")
-			//go kv.reconfig(oldCfg, cfg)
 			kv.handleNewConfig(oldCfg, cfg)
-			//kv.config = cfg
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
 }
 

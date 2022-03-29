@@ -162,6 +162,7 @@ func TestJoinLeave(t *testing.T) {
 func TestSnapshot(t *testing.T) {
 	fmt.Printf("Test: snapshots, join, and leave ...\n")
 
+	logger := logging.GetLogger("skv", logrus.DebugLevel)
 	cfg := make_config(t, 3, false, 1000)
 	defer cfg.cleanup()
 
@@ -194,7 +195,6 @@ func TestSnapshot(t *testing.T) {
 
 	cfg.leave(1)
 	cfg.join(0)
-
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 		x := randstring(20)
@@ -208,8 +208,9 @@ func TestSnapshot(t *testing.T) {
 		check(t, ck, ka[i], va[i])
 	}
 
+	fmt.Println("---------------------")
 	time.Sleep(1 * time.Second)
-
+	logger.Debug("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	cfg.checklogs()
 
 	cfg.ShutdownGroup(0)

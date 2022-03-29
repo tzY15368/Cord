@@ -35,6 +35,7 @@ type ShardKV struct {
 	shardCFGVersion    []int32
 	maxCFGVersion      int32
 	maxTransferVersion int32
+	cfgVerAlignedCond  *sync.Cond
 	// map[版本号]数据
 	outboundData map[int]map[string]string
 }
@@ -163,6 +164,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.clientID = nrand()
 	kv.requestID = 0
 	kv.shardCFGVersion = make([]int32, shardctrler.NShards)
+	kv.cfgVerAlignedCond = sync.NewCond(&kv.mu)
 	go kv.pollCFG()
 	go kv.applyMsgHandler()
 	return kv

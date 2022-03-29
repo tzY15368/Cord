@@ -146,11 +146,16 @@ func (kv *ShardKV) evalTransferOP(op *Op) opResult {
 	// }
 	for shardKey := range pullTarget {
 		if kv.shardCFGVersion[shardKey] != int32(cfg.Num)-1 {
-			kv.logger.Panic("no swap", kv.shardCFGVersion[shardKey], int32(cfg.Num))
+			kv.logger.Panic("skv: evalCFG: no swap", kv.shardCFGVersion[shardKey], int32(cfg.Num))
 		} else {
 			kv.shardCFGVersion[shardKey] = int32(cfg.Num)
 		}
 	}
+	// check state
+	if !kv.cfgVerIsAligned(int32(cfg.Num)) {
+		panic("invalid state")
+	}
+	kv.cfgVerAlignedCond.Broadcast()
 	kv.logger.WithField("version", kv.dumpShardVersion()).Debug("svCFG: evalCFG: updated version")
 
 	for key := range pullData {
