@@ -21,7 +21,7 @@ func (kv *ShardKV) shouldIssueSnapshot() bool {
 		kv.logger.WithFields(logrus.Fields{
 			"raftStateSize": rfSize,
 			"maxraftState":  kv.maxraftstate,
-		}).Debug("kv: should issue snapshot")
+		}).Debug("skv: kvstore: should issue snapshot")
 		return true
 	}
 	return false
@@ -60,26 +60,6 @@ func (kv *ShardKV) evalOp(idx int, op *Op) opResult {
 		kv.data[op.OP_KEY] = op.OP_VALUE
 	case OP_APPEND:
 		kv.data[op.OP_KEY] += op.OP_VALUE
-		// case OP_MIGRATE:
-		// 	//再次检查上锁
-		// 	shardKey, err := strconv.Atoi(op.OP_KEY)
-		// 	if err != nil {
-		// 		panic(err)
-		// 	}
-		// 	if atomic.LoadInt32(&kv.shardLocks[shardKey]) != 1 {
-		// 		panic("errnolock")
-		// 	}
-		// 	buf := bytes.NewBuffer([]byte(op.OP_VALUE))
-		// 	decoder := labgob.NewDecoder(buf)
-		// 	var migrateMap map[string]string
-		// 	err = decoder.Decode(&migrateMap)
-		// 	if err != nil {
-		// 		panic(err)
-		// 	}
-
-		// 	for key := range migrateMap {
-		// 		kv.data[key] = migrateMap[key]
-		// 	}
 	}
 	// snapshot
 	if kv.shouldIssueSnapshot() {
@@ -106,10 +86,23 @@ func (kv *ShardKV) dumpData() *[]byte {
 	if err != nil {
 		panic(err)
 	}
+	err = encoder.Encode(&kv.shardCFGVersion)
+	if err != nil {
+		panic(err)
+	}
+	err = encoder.Encode(&kv.maxCFGVersion)
+	if err != nil {
+		panic(err)
+	}
+	err = encoder.Encode(&kv.maxTransferVersion)
+	if err != nil {
+		panic(err)
+	}
 	by := buf.Bytes()
 	return &by
 }
 
+// loadSnapshot thread safe
 func (kv *ShardKV) loadSnapshot(data []byte) {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
@@ -119,6 +112,18 @@ func (kv *ShardKV) loadSnapshot(data []byte) {
 		panic(err)
 	}
 	err = decoder.Decode(&kv.ack)
+	if err != nil {
+		panic(err)
+	}
+	err = decoder.Decode(&kv.shardCFGVersion)
+	if err != nil {
+		panic(err)
+	}
+	err = decoder.Decode(&kv.maxCFGVersion)
+	if err != nil {
+		panic(err)
+	}
+	err = decoder.Decode(&kv.maxTransferVersion)
 	if err != nil {
 		panic(err)
 	}

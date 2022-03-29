@@ -137,14 +137,22 @@ func (kv *ShardKV) evalTransferOP(op *Op) opResult {
 	if err != nil {
 		panic(err)
 	}
+	kv.mu.Lock()
+	// for shardKey := range pullTarget {
+	// 	swapped := atomic.CompareAndSwapInt32(&kv.shardCFGVersion[shardKey], int32(cfg.Num-1), int32(cfg.Num))
+	// 	if !swapped {
+	// 		kv.logger.Panic("no swap", cfg.Num, atomic.LoadInt32(&kv.shardCFGVersion[shardKey]))
+	// 	}
+	// }
 	for shardKey := range pullTarget {
-		swapped := atomic.CompareAndSwapInt32(&kv.shardCFGVersion[shardKey], int32(cfg.Num-1), int32(cfg.Num))
-		if !swapped {
-			kv.logger.Panic("no swap", cfg.Num, atomic.LoadInt32(&kv.shardCFGVersion[shardKey]))
+		if kv.shardCFGVersion[shardKey] != int32(cfg.Num)-1 {
+			kv.logger.Panic("no swap", kv.shardCFGVersion[shardKey], int32(cfg.Num))
+		} else {
+			kv.shardCFGVersion[shardKey] = int32(cfg.Num)
 		}
 	}
 	kv.logger.WithField("version", kv.dumpShardVersion()).Debug("svCFG: evalCFG: updated version")
-	kv.mu.Lock()
+
 	for key := range pullData {
 		kv.data[key] = pullData[key]
 	}

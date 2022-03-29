@@ -70,16 +70,19 @@ func (kv *ShardKV) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 }
 
 // dumpShardLocks not atomic, not thread safe
-func (kv *ShardKV) dumpShardVersion() []int {
-	res := make([]int, len(kv.shardCFGVersion))
-	for i := 0; i < len(kv.shardCFGVersion); i++ {
-		res[i] = int(atomic.LoadInt32(&kv.shardCFGVersion[i]))
-	}
-	return res
+func (kv *ShardKV) dumpShardVersion() []int32 {
+	// res := make([]int, len(kv.shardCFGVersion))
+	// for i := 0; i < len(kv.shardCFGVersion); i++ {
+	// 	res[i] = int(atomic.LoadInt32(&kv.shardCFGVersion[i]))
+	// }
+	// return res
+	return kv.shardCFGVersion
 }
 
 // 变成拉数据，这里要填充kvstore数据到reply.data
 func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
 	if !kv.shardVersionIsNew(args.Shard) || int32(args.ConfigNum) > atomic.LoadInt32(&kv.maxCFGVersion) {
 		reply.Err = ErrReConfigure
 		kv.logger.WithFields(logrus.Fields{
@@ -91,13 +94,11 @@ func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
 	}
 
 	reply.Data = make(map[string]string)
-	kv.mu.Lock()
 	for key := range kv.data {
 		if key2shard(key) == args.Shard {
 			reply.Data[key] = kv.data[key]
 		}
 	}
-	kv.mu.Unlock()
 	reply.Err = OK
 }
 

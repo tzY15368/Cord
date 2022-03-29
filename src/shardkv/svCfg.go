@@ -9,8 +9,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// shardVersionIsNew not thread safe
 func (kv *ShardKV) shardVersionIsNew(shard int) bool {
-	return atomic.LoadInt32(&kv.shardCFGVersion[shard]) == atomic.LoadInt32(&kv.maxCFGVersion)
+	//return atomic.LoadInt32(&kv.shardCFGVersion[shard]) == atomic.LoadInt32(&kv.maxCFGVersion)
+	return kv.shardCFGVersion[shard] == kv.maxCFGVersion
 }
 
 // shouldServeKey thread safe
@@ -52,17 +54,22 @@ func (kv *ShardKV) evalCFGOP(op *Op) opResult {
 	diff := cfg.DiffOld(&oldConfig)
 	tome := diff.ToMe(kv.gid)
 
-	kv.mu.Unlock()
 	// diff完了以后加锁?
 	// 不tome的shard可以直接bump版本号
 	for i := 0; i < shardctrler.NShards; i++ {
 		if _, ok := tome[i]; !ok {
-			swapped := atomic.CompareAndSwapInt32(&kv.shardCFGVersion[i], int32(cfg.Num-1), int32(cfg.Num))
-			if !swapped {
-				kv.logger.Panic("no swap", cfg.Num, atomic.LoadInt32(&kv.shardCFGVersion[i]))
+			// swapped := atomic.CompareAndSwapInt32(&kv.shardCFGVersion[i], int32(cfg.Num-1), int32(cfg.Num))
+			// if !swapped {
+			// 	kv.logger.Panic("no swap", cfg.Num, atomic.LoadInt32(&kv.shardCFGVersion[i]))
+			// }
+			if kv.shardCFGVersion[i] != int32(cfg.Num)-1 {
+				kv.logger.Panic("no swap", kv.shardCFGVersion[i], int32(cfg.Num))
+			} else {
+				kv.shardCFGVersion[i] = int32(cfg.Num)
 			}
 		}
 	}
+	kv.mu.Unlock()
 
 	kv.logger.WithField("version", kv.dumpShardVersion()).Debug("svCFG: evalCFG: updated version")
 	// 加完锁不能只leader发op-transfer，
