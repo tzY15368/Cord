@@ -119,6 +119,7 @@ func (kv *ShardKV) handleTransfer(pullTarget map[int]int, oldCfg shardctrler.Con
 // // server impl：如果shard的cfgversion小于当前transferCFGIndex：返回ErrReconfigure；
 // // 如果等于，用key2shard查自己到底现在serve不serve这个key
 
+// evalTransferOP not thread safe
 func (kv *ShardKV) evalTransferOP(op *Op) opResult {
 	cfg := shardctrler.LoadCFG(op.OP_KEY)
 	if cfg.Num <= int(atomic.LoadInt32(&kv.maxTransferVersion)) {
@@ -129,7 +130,10 @@ func (kv *ShardKV) evalTransferOP(op *Op) opResult {
 	} else {
 		swapped := atomic.CompareAndSwapInt32(&kv.maxTransferVersion, int32(cfg.Num-1), int32(cfg.Num))
 		if !swapped {
-			panic("no swap")
+			kv.logger.WithFields(logrus.Fields{
+				"want":               cfg.Num - 1,
+				"old_maxTransferVer": atomic.LoadInt32(&kv.maxTransferVersion),
+			}).Panic("evalTransfer: no swap")
 		}
 	}
 
@@ -144,7 +148,7 @@ func (kv *ShardKV) evalTransferOP(op *Op) opResult {
 	if err != nil {
 		panic(err)
 	}
-	kv.mu.Lock()
+	//kv.mu.Lock()
 	// for shardKey := range pullTarget {
 	// 	swapped := atomic.CompareAndSwapInt32(&kv.shardCFGVersion[shardKey], int32(cfg.Num-1), int32(cfg.Num))
 	// 	if !swapped {
@@ -170,7 +174,7 @@ func (kv *ShardKV) evalTransferOP(op *Op) opResult {
 		kv.data[key] = pullData[key]
 	}
 	kv.logger.WithField("all", kv.data).Debug("svCFG: in trans op")
-	kv.mu.Unlock()
+	//kv.mu.Unlock()
 	return opResult{
 		err:         OK,
 		RequestInfo: op.RequestInfo,

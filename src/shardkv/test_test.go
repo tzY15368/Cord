@@ -169,7 +169,7 @@ func TestJoinLeave(t *testing.T) {
 
 func TestSnapshot(t *testing.T) {
 	fmt.Printf("Test: snapshots, join, and leave ...\n")
-
+	logging.DropLogFile("skv")
 	logger := logging.GetLogger("skv", logrus.DebugLevel)
 	cfg := make_config(t, 3, false, 1000)
 	defer cfg.cleanup()

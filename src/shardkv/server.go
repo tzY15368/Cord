@@ -29,9 +29,9 @@ type ShardKV struct {
 	notify             map[int]chan opResult
 	ack                map[int64]int64
 	data               map[string]string
-	inSnapshot         int32
 	clientID           int64
 	requestID          int64
+	msgCount           int64
 	shardCFGVersion    []int32
 	maxCFGVersion      int32
 	maxTransferVersion int32
@@ -177,6 +177,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
+	kv.rf.SetGID(gid)
 	kv.logger = logging.GetLogger("skv", common.ShardKVLogLevel).WithField("id", fmt.Sprintf("%d-%d", gid, me))
 	kv.ctlClerk = shardctrler.MakeClerk(kv.ctrlers)
 	kv.notify = make(map[int]chan opResult)

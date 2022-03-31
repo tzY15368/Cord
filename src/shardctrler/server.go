@@ -132,7 +132,7 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 // appendConfig not thread safe
 // returns the newly appended config for update
 func (sc *ShardCtrler) appendConfig() *Config {
-	newCfg := sc.configs[len(sc.configs)-1].clone()
+	newCfg := sc.configs[len(sc.configs)-1].bump()
 	sc.configs = append(sc.configs, newCfg)
 	return &newCfg
 }

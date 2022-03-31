@@ -41,7 +41,7 @@ func (sc *ShardCtrler) evalOp(op Op) opResult {
 		}
 		prevCfg := sc.configs[len(sc.configs)-1]
 		prevCfg.dump(sc.logger).Debug("sc: join: before join")
-		newConfig := prevCfg.clone()
+		newConfig := prevCfg.bump()
 		for k, v := range servers {
 			newConfig.Groups[k] = v
 		}
@@ -61,7 +61,7 @@ func (sc *ShardCtrler) evalOp(op Op) opResult {
 		if err != nil {
 			sc.logger.Panic("decode fail", op.OP_TYPE, err)
 		}
-		newCfg := sc.configs[len(sc.configs)-1].clone()
+		newCfg := sc.configs[len(sc.configs)-1].bump()
 		newCfg.dump(sc.logger).Debug("sc: leave: before leave")
 		sc.logger.WithField("cfg", fmt.Sprintf("%+v", newCfg)).Debug("sc: leave: before leave")
 		for _, gid := range gids {

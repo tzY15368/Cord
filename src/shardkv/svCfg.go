@@ -33,14 +33,15 @@ func (kv *ShardKV) shouldServeKey(key string) Err {
 	return OK
 }
 
+// evalCFGOP not thread safe
 func (kv *ShardKV) evalCFGOP(op *Op) opResult {
 
 	cfg := shardctrler.LoadCFG(op.OP_VALUE)
-	kv.mu.Lock()
+	// kv.mu.Lock()
 	oldConfig := kv.config
 	if cfg.Num <= int(atomic.LoadInt32(&kv.maxCFGVersion)) {
 		kv.logger.Warn("ignoring old nums, possible restart", cfg.Num, oldConfig.Num)
-		kv.mu.Unlock()
+		//kv.mu.Unlock()
 		return opResult{
 			err: ErrSeenConfig,
 		}
@@ -88,11 +89,12 @@ func (kv *ShardKV) evalCFGOP(op *Op) opResult {
 		"data":     kv.data,
 	}).Debug("svCFG: evalCFG: updated version")
 
-	kv.mu.Unlock()
+	// kv.mu.Unlock()
 	// 加完锁不能只leader发op-transfer，
 	// 因为如果在等对方返回的时候失去了leader数据就丢了，且无法恢复
 	// 只能一个group里所有人都给目标机器发
-	go kv.handleTransfer(tome, oldConfig, cfg)
+	alt_cfg := cfg.Clone()
+	go kv.handleTransfer(tome, oldConfig, alt_cfg)
 	return opResult{
 		err:         OK,
 		RequestInfo: op.RequestInfo,
@@ -110,6 +112,7 @@ func (kv *ShardKV) cfgVerIsAligned(ver int32) bool {
 }
 
 func (kv *ShardKV) pollCFG() {
+	kv.logger.Debug("skv: poll: started poll")
 	for {
 		time.Sleep(100 * time.Millisecond)
 		kv.mu.Lock()

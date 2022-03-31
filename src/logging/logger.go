@@ -13,6 +13,11 @@ import (
 var loggerMap = make(map[string]*logrus.Logger)
 var mu sync.Mutex
 
+func DropLogFile(name string) {
+	var logFilename = name + "-out.log"
+	os.Remove(logFilename)
+}
+
 func GetLogger(name string, level logrus.Level) *logrus.Logger {
 	mu.Lock()
 	defer mu.Unlock()

@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"math/rand"
 	"sync/atomic"
 	"time"
@@ -105,6 +106,12 @@ func (rf *Raft) Kill() {
 
 func (rf *Raft) killed() bool {
 	return atomic.LoadInt32(&rf.isKilled) == 1
+}
+
+func (rf *Raft) SetGID(gid int) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	rf.logger = rf.logger.WithField("id", fmt.Sprintf("%d-%d", gid, rf.me))
 }
 
 func (rf *Raft) ticker() {

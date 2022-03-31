@@ -77,15 +77,21 @@ func (kv *ShardKV) applyMsgHandler() {
 		if msg.CommandValid {
 			op := msg.Command.(Op)
 			var opRes opResult
+			kv.mu.Lock()
 			if op.OP_TYPE == OP_NEWCONFIG {
 				// 给对应key加锁或解锁
 				opRes = kv.evalCFGOP(&op)
+				kv.rf.Snapshot(msg.CommandIndex, *kv.dumpData())
 			} else if op.OP_TYPE == OP_TRANSFER {
 				opRes = kv.evalTransferOP(&op)
+				kv.rf.Snapshot(msg.CommandIndex, *kv.dumpData())
 			} else {
-				opRes = kv.evalOp(msg.CommandIndex, &op)
+				opRes = kv.evalOp(&op)
+				shouldSnapshot := kv.shouldIssueSnapshot()
+				if shouldSnapshot {
+					kv.rf.Snapshot(msg.CommandIndex, *kv.dumpData())
+				}
 			}
-			kv.mu.Lock()
 			ch, ok := kv.notify[msg.CommandIndex]
 			if ok {
 				select {

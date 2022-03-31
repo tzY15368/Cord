@@ -36,7 +36,6 @@ func LoadCFG(data string) Config {
 }
 
 func (cfg *Config) Dump() string {
-
 	buf := new(bytes.Buffer)
 	encoder := labgob.NewEncoder(buf)
 	err := encoder.Encode(cfg)
@@ -114,14 +113,21 @@ func (cfg *Config) dump(logger *logrus.Entry) *logrus.Entry {
 	return logger.WithField("cfg", fmt.Sprintf("%+v", cfg))
 }
 
-// clone not thread safe
-func (cfg *Config) clone() Config {
+// Bump not thread safe
+func (cfg *Config) Clone() Config {
 	c := Config{
-		Num:    cfg.Num + 1,
+		Num:    cfg.Num,
 		Shards: cfg.Shards,
 		Groups: copyMap(cfg.Groups),
 	}
 
+	return c
+}
+
+// bump not thread safe
+func (cfg *Config) bump() Config {
+	c := cfg.Clone()
+	c.Num += 1
 	return c
 }
 
