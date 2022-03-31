@@ -22,6 +22,7 @@ func (kv *ShardKV) sendMigrateRPC(groupServers []string, args *MigrateArgs, repl
 		Retry:
 			ok := kv.make_end(server).Call("ShardKV.Migrate", args, reply)
 			if ok && reply.Err == OK {
+				kv.logger.WithField("shard", args.Shard).Debug("skv: sendMigrate: done on shard")
 				return
 			} else if reply.Err == ErrReConfigure {
 				kv.logger.WithFields(logrus.Fields{
@@ -31,7 +32,9 @@ func (kv *ShardKV) sendMigrateRPC(groupServers []string, args *MigrateArgs, repl
 				time.Sleep(pollCFGInterval)
 				goto Retry
 			} else {
-				kv.logger.WithField("err", reply.Err).Debug("skv: sendMigrateRPC: reply=false")
+				if reply.Err != ErrWrongLeader {
+					kv.logger.WithField("err", reply.Err).Debug("skv: sendMigrateRPC: reply=false")
+				}
 			}
 		}
 		kv.logger.WithFields(logrus.Fields{
@@ -51,6 +54,10 @@ func (kv *ShardKV) handleTransfer(pullTarget map[int]int, oldCfg shardctrler.Con
 		_args := MigrateArgs{
 			Shard:     shardKey,
 			ConfigNum: newCfg.Num,
+			RequestInfo: common.RequestInfo{
+				ClientID:  kv.clientID,
+				RequestID: atomic.AddInt64(&kv.requestID, 1),
+			},
 		}
 		wg.Add(1)
 		go func(args MigrateArgs, gid int) {
@@ -144,6 +151,7 @@ func (kv *ShardKV) evalTransferOP(op *Op) opResult {
 	// 		kv.logger.Panic("no swap", cfg.Num, atomic.LoadInt32(&kv.shardCFGVersion[shardKey]))
 	// 	}
 	// }
+	kv.logger.WithField("version", kv.dumpShardVersion()).Debug("svCFG: before trans op")
 	for shardKey := range pullTarget {
 		if kv.shardCFGVersion[shardKey] != int32(cfg.Num)-1 {
 			kv.logger.Panic("skv: evalCFG: no swap", kv.shardCFGVersion[shardKey], int32(cfg.Num))
@@ -161,6 +169,7 @@ func (kv *ShardKV) evalTransferOP(op *Op) opResult {
 	for key := range pullData {
 		kv.data[key] = pullData[key]
 	}
+	kv.logger.WithField("all", kv.data).Debug("svCFG: in trans op")
 	kv.mu.Unlock()
 	return opResult{
 		err:         OK,

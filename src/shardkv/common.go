@@ -59,9 +59,9 @@ const (
 	OP_GET = iota
 	OP_PUT
 	OP_APPEND
-	//OP_CFG
-	//OP_MIGRATE
+	// newconfig 用于每一个实例，当发现新config时发opconfig广播，尝试开启transfer
 	OP_NEWCONFIG
+	// transfer 用于主动拉完数据后在本集群内广播，通知新数据
 	OP_TRANSFER
 )
 

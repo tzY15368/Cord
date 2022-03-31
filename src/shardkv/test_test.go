@@ -125,7 +125,7 @@ func TestJoinLeave(t *testing.T) {
 		check(t, ck, ka[i], va[i])
 	}
 	cfg.join(1)
-
+	logger.Debug("~~~~~~~~~~~~~~~~~~~~~~~~~~~joined")
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 		x := randstring(5)
@@ -137,7 +137,15 @@ func TestJoinLeave(t *testing.T) {
 	cfg.leave(0)
 
 	for i := 0; i < n; i++ {
+		fmt.Println(ka[i], " ", key2shard(ka[i]))
+
+		fmt.Println(va[i])
+		fmt.Println("----------")
+	}
+
+	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
+
 		x := randstring(5)
 		ck.Append(ka[i], x)
 		va[i] += x

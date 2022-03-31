@@ -93,14 +93,35 @@ func (kv *ShardKV) Migrate(args *MigrateArgs, reply *MigrateReply) {
 		}).Debug("skv: migrate: version is not new, retry later")
 		return
 	}
-
-	reply.Data = make(map[string]string)
-	for key := range kv.data {
-		if key2shard(key) == args.Shard {
-			reply.Data[key] = kv.data[key]
+	if _, isLeader := kv.rf.GetState(); !isLeader {
+		reply.Err = ErrWrongLeader
+	} else {
+		reply.Data = make(map[string]string)
+		// for key := range kv.data {
+		// 	if key2shard(key) == args.Shard {
+		// 		reply.Data[key] = kv.data[key]
+		// 	}
+		// }
+		out, ok := kv.outboundData[args.ConfigNum]
+		if ok {
+			for key := range out {
+				if key2shard(key) == args.Shard {
+					reply.Data[key] = out[key]
+				}
+			}
 		}
+		kv.logger.WithFields(logrus.Fields{
+			"args.shard": args.Shard,
+			"num":        args.ConfigNum,
+			"replyData":  reply.Data,
+		}).Debug("skv: migrate: sending reply")
+		reply.Err = OK
 	}
-	reply.Err = OK
+	// 因为之前每个实例收到config广播的逻辑时间是一致的，打出的outbounddata
+	// 快照也应该是一致的，这里不需要额外的op
+
+	kv.logger.WithField("reply", fmt.Sprintf("%+v", reply.Err)).WithField("len", len(reply.Data)).
+		Debug("skv: migrate: result")
 }
 
 //
@@ -165,6 +186,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.requestID = 0
 	kv.shardCFGVersion = make([]int32, shardctrler.NShards)
 	kv.cfgVerAlignedCond = sync.NewCond(&kv.mu)
+	kv.outboundData = make(map[int]map[string]string)
 	go kv.pollCFG()
 	go kv.applyMsgHandler()
 	return kv

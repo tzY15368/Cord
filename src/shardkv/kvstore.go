@@ -22,7 +22,10 @@ func (kv *ShardKV) shouldIssueSnapshot() bool {
 			"raftStateSize": rfSize,
 			"maxraftState":  kv.maxraftstate,
 		}).Debug("skv: kvstore: should issue snapshot")
-		return true
+		ok := atomic.CompareAndSwapInt32(&kv.inSnapshot, 0, 1)
+		if ok {
+			return true
+		}
 	}
 	return false
 }
@@ -43,6 +46,14 @@ func (kv *ShardKV) evalOp(idx int, op *Op) opResult {
 	}
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
+	shard := key2shard(op.OP_KEY)
+	if kv.config.Shards[shard] != kv.gid {
+		res.err = ErrWrongGroup
+		kv.logger.WithFields(logrus.Fields{
+			"shard": shard,
+		}).Warn("kvstore: eval abort due to shard change")
+		return res
+	}
 	if kv.isDuplicateKVCMD(op.RequestInfo) {
 		return res
 	} else {
@@ -64,9 +75,11 @@ func (kv *ShardKV) evalOp(idx int, op *Op) opResult {
 	// snapshot
 	if kv.shouldIssueSnapshot() {
 		go func(index int, data *[]byte) {
-			atomic.StoreInt32(&kv.inSnapshot, 1)
 			kv.rf.Snapshot(index, *data)
-			atomic.StoreInt32(&kv.inSnapshot, 0)
+			ok := atomic.CompareAndSwapInt32(&kv.inSnapshot, 1, 0)
+			if !ok {
+				panic("no snapshot unlock")
+			}
 		}(idx, kv.dumpData())
 	}
 	kv.logger.WithField("op", fmt.Sprintf("%+v", op)).

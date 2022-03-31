@@ -17,12 +17,12 @@ func (kv *ShardKV) shardVersionIsNew(shard int) bool {
 
 // shouldServeKey thread safe
 func (kv *ShardKV) shouldServeKey(key string) Err {
+	kv.mu.Lock()
 	kv.logger.WithFields(logrus.Fields{
 		"version": kv.dumpShardVersion(),
 		"key":     key,
 	}).Debug("svCFG: shouldServeKey")
 	shard := key2shard(key)
-	kv.mu.Lock()
 	defer kv.mu.Unlock()
 	if kv.config.Shards[shard] != kv.gid {
 		return ErrWrongGroup
@@ -69,9 +69,26 @@ func (kv *ShardKV) evalCFGOP(op *Op) opResult {
 			}
 		}
 	}
-	kv.mu.Unlock()
+	fromMe := diff.FromMe(kv.gid)
+	out, ok := kv.outboundData[cfg.Num]
+	if !ok {
+		out = make(map[string]string)
+		kv.outboundData[cfg.Num] = out
+	}
+	for key := range kv.data {
+		shard := key2shard(key)
+		if _, ok := fromMe[shard]; ok {
+			out[key] = kv.data[key]
+		}
+	}
+	kv.logger.WithFields(logrus.Fields{
+		"version":  kv.dumpShardVersion(),
+		"outbound": out,
+		"fromme":   fromMe,
+		"data":     kv.data,
+	}).Debug("svCFG: evalCFG: updated version")
 
-	kv.logger.WithField("version", kv.dumpShardVersion()).Debug("svCFG: evalCFG: updated version")
+	kv.mu.Unlock()
 	// 加完锁不能只leader发op-transfer，
 	// 因为如果在等对方返回的时候失去了leader数据就丢了，且无法恢复
 	// 只能一个group里所有人都给目标机器发

@@ -30,7 +30,8 @@ DirectStart:
 	kv.logger.WithFields(logrus.Fields{
 		"index": index,
 		"op":    fmt.Sprintf("%+v", op),
-	}).Debug("skv: propose: start is ok")
+		"shard": key2shard(op.OP_KEY),
+	}).Debugf("skv: propose: start %d is ok", op.OP_TYPE)
 	doneChan := make(chan opResult, 1)
 	lostLeaderChan := make(chan struct{}, 1)
 	// var runCheckLeader int32 = 1
