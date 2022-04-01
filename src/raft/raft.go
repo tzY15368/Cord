@@ -111,7 +111,11 @@ func (rf *Raft) killed() bool {
 func (rf *Raft) SetGID(gid int) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	rf.logger = rf.logger.WithField("id", fmt.Sprintf("%d-%d", gid, rf.me))
+	if gid == -1 {
+		rf.logger = logging.GetLogger("ctlrf", logrus.InfoLevel).WithField("id", rf.me)
+	} else {
+		rf.logger = rf.logger.WithField("id", fmt.Sprintf("%d-%d", gid, rf.me))
+	}
 }
 
 func (rf *Raft) ticker() {
@@ -151,7 +155,10 @@ func (rf *Raft) ticker() {
 				rf.mu.Unlock()
 			case <-rf.chanWinElect:
 				rf.mu.Lock()
-				rf.logger.WithField("term", rf.currentTerm).Info("election: became leader")
+				rf.logger.WithFields(logrus.Fields{
+					"term": rf.currentTerm,
+					"at":   time.Now(),
+				}).Info("election: became leader")
 				// rf.nextIndex = make([]int, len(rf.peers))
 				// rf.matchIndex = make([]int, len(rf.peers))
 				nextIndex := rf.getLastLogIndex() + 1

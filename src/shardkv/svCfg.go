@@ -150,5 +150,7 @@ func (kv *ShardKV) handleNewConfig(oldCFG shardctrler.Config, newCFG shardctrler
 		}).Debug("svCFG: handleNewConfig: proposed")
 	} else if reply.Err == ErrSeenConfig {
 		panic("invalid seq conf")
+	} else {
+		kv.logger.WithField("err", reply.Err).Debug("skv: handleNewConfig: rejected")
 	}
 }

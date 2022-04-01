@@ -94,14 +94,24 @@ func (ck *Clerk) Get(key string) string {
 				if ok && (reply.Err == OK || reply.Err == ErrNoKey) {
 					return reply.Value
 				} else {
-					ck.logger.WithField("err", reply.Err).Debug("sck: get: got error")
+					ck.logger.WithFields(logrus.Fields{
+						"err": reply.Err,
+						"ok":  ok,
+					}).Debug("sck: get: got error")
+					if !ok {
+						ck.logger.Debug("sck: ok==false, next server")
+						ck.mu.Lock()
+						ck.groupLeader[gid] = (ck.groupLeader[gid] + 1) % len(servers)
+						ck.mu.Unlock()
+						continue
+					}
 					if reply.Err == ErrWrongLeader {
 						ck.mu.Lock()
 						ck.groupLeader[gid] = (ck.groupLeader[gid] + 1) % len(servers)
 						ck.mu.Unlock()
 						continue
 					}
-					if reply.Err == ErrWrongGroup || !ok {
+					if reply.Err == ErrWrongGroup {
 						break
 					}
 					if reply.Err == ErrReConfigure {

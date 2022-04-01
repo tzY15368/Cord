@@ -14,7 +14,7 @@ const (
 	ShardKVLogLevel  = logrus.DebugLevel
 )
 const (
-	ApplyCHTimeout = 15 * time.Second
+	ApplyCHTimeout = 800 * time.Millisecond
 	StateSizeDiff  = 50
 )
 

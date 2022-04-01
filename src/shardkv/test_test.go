@@ -236,15 +236,19 @@ func TestSnapshot(t *testing.T) {
 	fmt.Printf("  ... Passed\n")
 }
 
+func println(line string) {
+	logging.GetLogger("skv", logrus.DebugLevel).Debug(line)
+	fmt.Println(line)
+}
+
 func TestMissChange(t *testing.T) {
 	fmt.Printf("Test: servers miss configuration changes...\n")
-
 	cfg := make_config(t, 3, false, 1000)
 	defer cfg.cleanup()
 
 	ck := cfg.makeClient()
 
-	cfg.join(0)
+	cfg.join(0) // 1
 
 	n := 10
 	ka := make([]string, n)
@@ -258,23 +262,24 @@ func TestMissChange(t *testing.T) {
 		check(t, ck, ka[i], va[i])
 	}
 
-	cfg.join(1)
+	cfg.join(1) // 2
 
 	cfg.ShutdownServer(0, 0)
 	cfg.ShutdownServer(1, 0)
 	cfg.ShutdownServer(2, 0)
-
-	cfg.join(2)
-	cfg.leave(1)
-	cfg.leave(0)
-
+	println("down---------------------")
+	cfg.join(2)  // 3
+	cfg.leave(1) // 4
+	cfg.leave(0) // 5
+	println("done-----------------------")
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
+		println("check ok")
 		x := randstring(20)
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
-
+	println("________________________")
 	cfg.join(1)
 
 	for i := 0; i < n; i++ {
@@ -283,6 +288,7 @@ func TestMissChange(t *testing.T) {
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	println("~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
 	cfg.StartServer(0, 0)
 	cfg.StartServer(1, 0)

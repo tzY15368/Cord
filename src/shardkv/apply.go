@@ -66,6 +66,7 @@ func (kv *ShardKV) applyEntry(index int) opResult {
 	case result := <-ch:
 		return result
 	case <-time.After(common.ApplyCHTimeout):
+		kv.logger.WithField("index", index).Debug("skv: timeout applyEntry")
 		return opResult{err: ErrWrongLeader}
 	}
 }
