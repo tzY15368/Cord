@@ -123,8 +123,11 @@ func (kv *ShardKV) pollCFG() {
 		kv.mu.Unlock()
 		cfg := kv.ctlClerk.Query(oldCfg.Num + 1)
 		if cfg.Num != oldCfg.Num {
-			kv.logger.WithField("old", oldCfg.Num).
-				WithField("new", cfg.Num).Debug("skv: poll: found new cfg")
+			kv.logger.WithFields(logrus.Fields{
+				"old": oldCfg.Num,
+				"new": cfg.Num,
+				"at":  time.Now(),
+			}).Debug("skv: poll: found new cfg")
 			kv.handleNewConfig(oldCfg, cfg)
 		}
 	}

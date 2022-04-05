@@ -31,6 +31,7 @@ DirectStart:
 		"index": index,
 		"op":    fmt.Sprintf("%+v", op),
 		"shard": key2shard(op.OP_KEY),
+		"at":    time.Now(),
 	}).Debugf("skv: propose: start %d is ok", op.OP_TYPE)
 	doneChan := make(chan opResult, 1)
 	lostLeaderChan := make(chan struct{}, 1)

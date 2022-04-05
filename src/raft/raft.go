@@ -91,7 +91,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	if isLeader {
 		term = rf.currentTerm
 		index = rf.getLastLogIndex() + 1
-		rf.logger.WithField("command", command).Info("start: got command")
+		rf.logger.WithField("command", command).WithField("at", time.Now()).Info("start: got command")
 		rf.log = append(rf.log, LogEntry{Index: index, Term: term, Command: command})
 		go rf.broadcastAppendEntries()
 	}
