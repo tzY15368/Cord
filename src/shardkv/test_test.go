@@ -1,15 +1,20 @@
 package shardkv
 
-import "6.824/porcupine"
-import "6.824/models"
-import "testing"
-import "strconv"
-import "time"
-import "fmt"
-import "sync/atomic"
-import "sync"
-import "math/rand"
-import "io/ioutil"
+import (
+	"fmt"
+	"io/ioutil"
+	"math/rand"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"6.824/logging"
+	"6.824/models"
+	"6.824/porcupine"
+	"github.com/sirupsen/logrus"
+)
 
 const linearizabilityCheckTimeout = 1 * time.Second
 
@@ -23,7 +28,9 @@ func check(t *testing.T, ck *Clerk, key string, value string) {
 //
 // test static 2-way sharding, without shard movement.
 //
+
 func TestStaticShards(t *testing.T) {
+	logger := logging.GetLogger("skv", logrus.DebugLevel)
 	fmt.Printf("Test: static shards ...\n")
 
 	cfg := make_config(t, 3, false, -1)
@@ -49,6 +56,7 @@ func TestStaticShards(t *testing.T) {
 	// make sure that the data really is sharded by
 	// shutting down one shard and checking that some
 	// Get()s don't succeed.
+	logger.Debug("----------------------------------------")
 	cfg.ShutdownGroup(1)
 	cfg.checklogs() // forbid snapshots
 
@@ -84,7 +92,7 @@ func TestStaticShards(t *testing.T) {
 	if ndone != 5 {
 		t.Fatalf("expected 5 completions with one shard dead; got %v\n", ndone)
 	}
-
+	logger.Debug("================================")
 	// bring the crashed shard/group back to life.
 	cfg.StartGroup(1)
 	for i := 0; i < n; i++ {
@@ -95,6 +103,7 @@ func TestStaticShards(t *testing.T) {
 }
 
 func TestJoinLeave(t *testing.T) {
+	logger := logging.GetLogger("skv", logrus.DebugLevel)
 	fmt.Printf("Test: join then leave ...\n")
 
 	cfg := make_config(t, 3, false, -1)
@@ -115,29 +124,40 @@ func TestJoinLeave(t *testing.T) {
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 	}
-
 	cfg.join(1)
-
+	logger.Debug("~~~~~~~~~~~~~~~~~~~~~~~~~~~joined")
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 		x := randstring(5)
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
-
+	logger.Debug("___________________________________")
+	fmt.Println("---------------------")
 	cfg.leave(0)
 
 	for i := 0; i < n; i++ {
+		fmt.Println(ka[i], " ", key2shard(ka[i]))
+
+		fmt.Println(va[i])
+		fmt.Println("----------")
+	}
+
+	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
+
 		x := randstring(5)
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
 
+	logger.Debug("-----------------------------------")
 	// allow time for shards to transfer.
 	time.Sleep(1 * time.Second)
-
+	logger.Debug("====================================")
 	cfg.checklogs()
+	fmt.Println("~~~~~~~~~~~~~~~~~~~~~")
+	logger.Debug("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	cfg.ShutdownGroup(0)
 
 	for i := 0; i < n; i++ {
@@ -149,7 +169,8 @@ func TestJoinLeave(t *testing.T) {
 
 func TestSnapshot(t *testing.T) {
 	fmt.Printf("Test: snapshots, join, and leave ...\n")
-
+	logging.DropLogFile("skv")
+	logger := logging.GetLogger("skv", logrus.DebugLevel)
 	cfg := make_config(t, 3, false, 1000)
 	defer cfg.cleanup()
 
@@ -182,7 +203,6 @@ func TestSnapshot(t *testing.T) {
 
 	cfg.leave(1)
 	cfg.join(0)
-
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
 		x := randstring(20)
@@ -196,8 +216,9 @@ func TestSnapshot(t *testing.T) {
 		check(t, ck, ka[i], va[i])
 	}
 
+	fmt.Println("---------------------")
 	time.Sleep(1 * time.Second)
-
+	logger.Debug("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	cfg.checklogs()
 
 	cfg.ShutdownGroup(0)
@@ -215,15 +236,19 @@ func TestSnapshot(t *testing.T) {
 	fmt.Printf("  ... Passed\n")
 }
 
+func println(line string) {
+	logging.GetLogger("skv", logrus.DebugLevel).Debug(line)
+	fmt.Println(line)
+}
+
 func TestMissChange(t *testing.T) {
 	fmt.Printf("Test: servers miss configuration changes...\n")
-
 	cfg := make_config(t, 3, false, 1000)
 	defer cfg.cleanup()
 
 	ck := cfg.makeClient()
 
-	cfg.join(0)
+	cfg.join(0) // 1
 
 	n := 10
 	ka := make([]string, n)
@@ -237,23 +262,24 @@ func TestMissChange(t *testing.T) {
 		check(t, ck, ka[i], va[i])
 	}
 
-	cfg.join(1)
+	cfg.join(1) // 2
 
 	cfg.ShutdownServer(0, 0)
 	cfg.ShutdownServer(1, 0)
 	cfg.ShutdownServer(2, 0)
-
-	cfg.join(2)
-	cfg.leave(1)
-	cfg.leave(0)
-
+	println("down---------------------")
+	cfg.join(2)  // 3
+	cfg.leave(1) // 4
+	cfg.leave(0) // 5
+	println("done-----------------------")
 	for i := 0; i < n; i++ {
 		check(t, ck, ka[i], va[i])
+		println("check ok")
 		x := randstring(20)
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
-
+	println("________________________")
 	cfg.join(1)
 
 	for i := 0; i < n; i++ {
@@ -262,6 +288,7 @@ func TestMissChange(t *testing.T) {
 		ck.Append(ka[i], x)
 		va[i] += x
 	}
+	println("~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
 	cfg.StartServer(0, 0)
 	cfg.StartServer(1, 0)

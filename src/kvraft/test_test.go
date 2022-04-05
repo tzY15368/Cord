@@ -1,16 +1,24 @@
 package kvraft
 
-import "6.824/porcupine"
-import "6.824/models"
-import "testing"
-import "strconv"
-import "time"
-import "math/rand"
-import "strings"
-import "sync"
-import "sync/atomic"
-import "fmt"
-import "io/ioutil"
+import (
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"math/rand"
+	"os"
+	"runtime/pprof"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"6.824/logging"
+	"6.824/models"
+	"6.824/porcupine"
+	"github.com/sirupsen/logrus"
+)
 
 // The tester generously allows solutions to complete elections in one second
 // (much more than the paper's range of timeouts).
@@ -416,12 +424,34 @@ func GenericTestSpeed(t *testing.T, part string, maxraftstate int) {
 	cfg.end()
 }
 
+var doProfile = flag.String("prof", "", "write prof to file")
+
 func TestBasic3A(t *testing.T) {
 	// Test: one client (3A) ...
+
+	if *doProfile != "" {
+		f, err := os.Create(*doProfile)
+		if err != nil {
+			panic(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 	GenericTest(t, "3A", 1, 5, false, false, false, -1, false)
 }
 
 func TestSpeed3A(t *testing.T) {
+	if *doProfile != "" {
+		f, err := os.Create(*doProfile)
+		if err != nil {
+			panic(err)
+		}
+		go func() {
+			//time.Sleep(1 * time.Second)
+			pprof.StartCPUProfile(f)
+		}()
+		defer pprof.StopCPUProfile()
+	}
 	GenericTestSpeed(t, "3A", -1)
 }
 
@@ -471,6 +501,8 @@ func TestUnreliableOneKey3A(t *testing.T) {
 // doesn't go through until the partition heals.  The leader in the original
 // network ends up in the minority partition.
 func TestOnePartition3A(t *testing.T) {
+	logger := logging.GetLogger("raft", logrus.InfoLevel)
+	loggerkv := logging.GetLogger("kv", logrus.DebugLevel)
 	const nservers = 5
 	cfg := make_config(t, nservers, false, -1)
 	defer cfg.cleanup()
@@ -520,7 +552,8 @@ func TestOnePartition3A(t *testing.T) {
 	cfg.end()
 
 	cfg.begin("Test: completion after heal (3A)")
-
+	logger.Warn("----------- reconnect -----------")
+	loggerkv.Warn("------------ reconnect ------------")
 	cfg.ConnectAll()
 	cfg.ConnectClient(ckp2a, cfg.All())
 	cfg.ConnectClient(ckp2b, cfg.All())

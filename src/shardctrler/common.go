@@ -1,5 +1,9 @@
 package shardctrler
 
+import (
+	"6.824/common"
+)
+
 //
 // Shard controler: assigns shards to replication groups.
 //
@@ -17,25 +21,38 @@ package shardctrler
 // You will need to add fields to the RPC argument structs.
 //
 
-// The number of shards.
-const NShards = 10
-
 // A configuration -- an assignment of shards to groups.
 // Please don't change this.
-type Config struct {
-	Num    int              // config number
-	Shards [NShards]int     // shard -> gid
-	Groups map[int][]string // gid -> servers[]
+
+type opResult struct {
+	err         Err
+	requestInfo common.RequestInfo
+	cfg         *Config
+}
+type Op struct {
+	OP_TYPE int
+	OP_DATA []byte
+	common.RequestInfo
 }
 
 const (
-	OK = "OK"
+	OP_JOIN = iota
+	OP_LEAVE
+	OP_MOVE
+	OP_QUERY
+)
+
+const (
+	OK             = "OK"
+	ErrWrongLeader = Err("ErrWrongLeader")
+	ErrTimeout     = Err("ErrTimeout")
 )
 
 type Err string
 
 type JoinArgs struct {
 	Servers map[int][]string // new GID -> servers mappings
+	common.RequestInfo
 }
 
 type JoinReply struct {
@@ -45,6 +62,7 @@ type JoinReply struct {
 
 type LeaveArgs struct {
 	GIDs []int
+	common.RequestInfo
 }
 
 type LeaveReply struct {
@@ -55,6 +73,7 @@ type LeaveReply struct {
 type MoveArgs struct {
 	Shard int
 	GID   int
+	common.RequestInfo
 }
 
 type MoveReply struct {
@@ -64,6 +83,7 @@ type MoveReply struct {
 
 type QueryArgs struct {
 	Num int // desired config number
+	common.RequestInfo
 }
 
 type QueryReply struct {
