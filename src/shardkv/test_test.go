@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -23,6 +24,60 @@ func check(t *testing.T, ck *Clerk, key string, value string) {
 	if v != value {
 		t.Fatalf("Get(%v): expected:\n%v\nreceived:\n%v", key, value, v)
 	}
+}
+
+func TestSpeed(t *testing.T) {
+	fmt.Println("test speed")
+	cfg := make_config(t, 3, false, 500)
+	runtime.GOMAXPROCS(10)
+
+	defer cfg.cleanup()
+	var cks []*Clerk
+	for i := 0; i < 3; i++ {
+		cks = append(cks, cfg.makeClient())
+	}
+	cfg.join(0)
+	cfg.join(1)
+	cfg.join(2)
+	time.Sleep(1 * time.Second)
+	fmt.Println("--start")
+	start := time.Now()
+	var wg sync.WaitGroup
+	var i int32 = 0
+	nClients := 3
+	for j := 0; j < nClients; j++ {
+		wg.Add(1)
+		go func() {
+			for {
+				v := atomic.AddInt32(&i, 1)
+				if v > 10000 {
+					break
+				}
+				if v%1000 == 0 {
+					fmt.Println("-------------", v)
+				}
+				k := strconv.Itoa(int(v))
+				cks[v%3].Put(k, randstring(20))
+				cks[v%3].Get(k)
+			}
+			wg.Done()
+		}()
+	}
+	// for i := 0; i < 10000; i++ {
+	// 	v := strconv.Itoa(i)
+	// 	cks[i%3].Put(v, randstring(20))
+	// 	// wg.Add(1)
+	// 	// func(i int) {
+	// 	// 	cks[i%3].Put(v, randstring(20))
+	// 	// 	//time.Sleep(10 * time.Millisecond)
+	// 	// 	cks[i%3].Get(v)
+	// 	// 	wg.Done()
+	// 	// }(i)
+	// }
+	wg.Wait()
+	delta := time.Since(start)
+	var j float64 = 10000
+	fmt.Println("delta:", delta, " Avg:", float64(delta.Milliseconds())/j)
 }
 
 //

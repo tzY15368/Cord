@@ -9,16 +9,31 @@ package raft
 // test with the original before submitting.
 //
 
-import "sync"
+import (
+	"os"
+	"sync"
+)
 
 type Persister struct {
 	mu        sync.Mutex
 	raftstate []byte
 	snapshot  []byte
+	fd        *os.File
+	write     bool
 }
 
 func MakePersister() *Persister {
-	return &Persister{}
+	write := false
+	var fd *os.File
+	var err error
+	if write {
+
+		fd, err = os.OpenFile(randstring(5), os.O_CREATE|os.O_RDWR, 0644)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return &Persister{fd: fd, write: write}
 }
 
 func clone(orig []byte) []byte {
@@ -40,11 +55,20 @@ func (ps *Persister) SaveRaftState(state []byte) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.raftstate = clone(state)
+	if ps.write {
+
+		ps.fd.Write(state)
+	}
 }
 
 func (ps *Persister) ReadRaftState() []byte {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
+	if ps.write {
+
+		var b []byte
+		ps.fd.ReadAt(b, 0)
+	}
 	return clone(ps.raftstate)
 }
 
@@ -59,6 +83,11 @@ func (ps *Persister) RaftStateSize() int {
 func (ps *Persister) SaveStateAndSnapshot(state []byte, snapshot []byte) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
+	if ps.write {
+
+		ps.fd.Write(state)
+		ps.fd.Write(snapshot)
+	}
 	ps.raftstate = clone(state)
 	ps.snapshot = clone(snapshot)
 }
