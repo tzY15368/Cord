@@ -104,6 +104,7 @@ func (ck *Clerk) Get(key string) string {
 						"ok":  ok,
 					}).Debug("sck: get: got error")
 					if !ok {
+						break
 						ck.logger.Debug("sck: ok==false, next server")
 						ck.mu.Lock()
 						ck.groupLeader[gid] = (ck.groupLeader[gid] + 1) % len(servers)

@@ -13,9 +13,16 @@ const (
 	ShardCtlLogLevel = logrus.InfoLevel
 	ShardKVLogLevel  = logrus.DebugLevel
 )
+
 const (
-	ApplyCHTimeout = 800 * time.Millisecond
-	StateSizeDiff  = 50
+	LabRPC = iota
+	GRPC
+)
+
+const (
+	ApplyCHTimeout  = 800 * time.Millisecond
+	StateSizeDiff   = 50
+	NetworkProvider = LabRPC
 )
 
 func Min(i int, j int) int {
