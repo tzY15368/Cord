@@ -78,6 +78,7 @@ func (rf *Raft) readPersist() {
 	rf.lastIncludedTerm = lastIncludedTerm
 	rf.lastApplied = lastIncludedIndex
 	rf.commitIndex = lastIncludedIndex
+	rf.trimLog(lastIncludedIndex, lastIncludedIndex)
 	rf.snapshot = raftSnapshot
 	if rf.lastIncludedIndex > 0 {
 		msg := ApplyMsg{

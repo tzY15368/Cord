@@ -86,72 +86,90 @@ func (rf *Raft) unsafeCommitLog() {
 
 // get lastlog term not thread safe
 func (rf *Raft) getLastLogTerm() int {
-	if len(rf.log) == 0 {
-		if rf.lastIncludedTerm == 0 {
-			rf.logger.Panic("log: invalid log state:term")
-		} else {
-			rf.logger.
-				WithField("lastIncludedTerm", rf.lastIncludedTerm).
-				Debug("no existing logs, returning lastincludedTerm")
-		}
-		return rf.lastIncludedTerm
-	}
+	// if len(rf.log) == 0 {
+	// 	if rf.lastIncludedTerm == 0 {
+	// 		rf.logger.Panic("log: invalid log state:term")
+	// 	} else {
+	// 		rf.logger.
+	// 			WithField("lastIncludedTerm", rf.lastIncludedTerm).
+	// 			Debug("no existing logs, returning lastincludedTerm")
+	// 	}
+	// 	return rf.lastIncludedTerm
+	// }
 	return rf.log[len(rf.log)-1].Term
+}
+
+func (rf *Raft) getLastLogIndexOld() int {
+	return rf.log[len(rf.log)-1].Index
+}
+
+// trimLog not thread safe
+func (rf *Raft) trimLog(lastIncludedIndex int, lastIncludedTerm int) {
+	newLog := make([]LogEntry, 0)
+	newLog = append(newLog, LogEntry{Index: lastIncludedIndex, Term: lastIncludedTerm})
+
+	for i := len(rf.log) - 1; i >= 0; i-- {
+		if rf.log[i].Index == lastIncludedIndex && rf.log[i].Term == lastIncludedTerm {
+			newLog = append(newLog, rf.log[i+1:]...)
+			break
+		}
+	}
+	rf.log = newLog
 }
 
 // getlastlogindex not thread safe
 func (rf *Raft) getLastLogIndex() int {
-	if len(rf.log) == 0 {
-		if rf.lastIncludedIndex == 0 {
-			rf.logger.Panic("log: invalid log state:index")
-		} else {
-			rf.logger.
-				WithField("lastIncludedIndex", rf.lastIncludedIndex).
-				Debug("no existing logs, returning lastincludedIndex")
-		}
-		return rf.lastIncludedIndex
-	}
+	// if len(rf.log) == 0 {
+	// 	if rf.lastIncludedIndex == 0 {
+	// 		rf.logger.Panic("log: invalid log state:index")
+	// 	} else {
+	// 		rf.logger.
+	// 			WithField("lastIncludedIndex", rf.lastIncludedIndex).
+	// 			Debug("no existing logs, returning lastincludedIndex")
+	// 	}
+	// 	return rf.lastIncludedIndex
+	// }
 	return rf.log[len(rf.log)-1].Index
 }
 
 // 具体是什么？还得仔细想下
 // 目的是正确处理空log的情况
 func (rf *Raft) getBaseLogIndex() int {
-	if len(rf.log) == 0 {
-		if rf.lastIncludedIndex == 0 {
-			rf.logger.Panic("log: invalid log state:index")
-		} else {
-			rf.logger.
-				WithField("lastIncludedIndex", rf.lastIncludedIndex).
-				Debug("no existing logs, returning lastincludedIndex")
-		}
-		return rf.lastIncludedIndex
-	}
+	// if len(rf.log) == 0 {
+	// 	if rf.lastIncludedIndex == 0 {
+	// 		rf.logger.Panic("log: invalid log state:index")
+	// 	} else {
+	// 		rf.logger.
+	// 			WithField("lastIncludedIndex", rf.lastIncludedIndex).
+	// 			Debug("no existing logs, returning lastincludedIndex")
+	// 	}
+	// 	return rf.lastIncludedIndex
+	// }
 	return rf.log[0].Index
 }
 
 // getLogTermAtOffset not thread safe
 func (rf *Raft) getLogTermAtOffset(offset int) int {
-	if len(rf.log) == 0 {
-		if offset != 0 && rf.lastIncludedTerm == 0 {
-			rf.logger.WithFields(logrus.Fields{
-				"index": offset, "lastIncludedTerm": rf.lastIncludedTerm,
-			}).Panic("invalid state")
-		}
-		return rf.lastIncludedTerm
-	}
+	// if len(rf.log) == 0 {
+	// 	if offset != 0 && rf.lastIncludedTerm == 0 {
+	// 		rf.logger.WithFields(logrus.Fields{
+	// 			"index": offset, "lastIncludedTerm": rf.lastIncludedTerm,
+	// 		}).Panic("invalid state")
+	// 	}
+	// 	return rf.lastIncludedTerm
+	// }
 	return rf.log[offset].Term
 }
 
 // getLogIndexAtOffset not thread safe
 func (rf *Raft) getLogIndexAtOffset(offset int) int {
-	if len(rf.log) == 0 {
-		if offset != 0 && rf.lastIncludedIndex == 0 {
-			rf.logger.WithFields(logrus.Fields{
-				"index": offset, "lastIncludedindex": rf.lastIncludedIndex,
-			}).Panic("invalid state")
-		}
-		return rf.lastIncludedIndex
-	}
+	// if len(rf.log) == 0 {
+	// 	if offset != 0 && rf.lastIncludedIndex == 0 {
+	// 		rf.logger.WithFields(logrus.Fields{
+	// 			"index": offset, "lastIncludedindex": rf.lastIncludedIndex,
+	// 		}).Panic("invalid state")
+	// 	}
+	// 	return rf.lastIncludedIndex
+	// }
 	return rf.log[offset].Index
 }

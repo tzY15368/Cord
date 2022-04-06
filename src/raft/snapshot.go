@@ -1,12 +1,10 @@
 package raft
 
 import (
-	"bytes"
 	"fmt"
 	"time"
 
 	"6.824/common"
-	"6.824/labgob"
 	"github.com/sirupsen/logrus"
 )
 
@@ -28,46 +26,62 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	defer rf.persist()
-	rf.logger.WithFields(logrus.Fields{
-		"index": index,
-	}).Info("snapshot: got snapshot")
-	// commitIndex始终小于等于maxIndex，所以不用担心
-	baseIndex := rf.getBaseLogIndex()
-	fields := logrus.Fields{
-		"index": index, "commitIndex": rf.commitIndex, "baseIndex": baseIndex,
-	}
-	if index > rf.commitIndex {
-		rf.logger.WithFields(fields).Warn("snapshot: failed due to invalid index, index > rf.commitIndex")
-		return
-	} else {
-		rf.logger.WithFields(fields).Info("snapshot: params:")
-	}
-	newIndex := index - baseIndex
-	offset := newIndex - 1
-	if newIndex == 0 {
-		offset = 0
-	}
-	if offset < 0 {
-		rf.logger.WithFields(logrus.Fields{
-			"lastIncludedIindex": rf.lastIncludedIndex,
-		}).Warn("snapshot: offset < 0, doing absolute nothing")
+	baseIndex, lastIndex := rf.log[0].Index, rf.getLastLogIndexOld()
+	if index <= baseIndex || index > lastIndex {
 		return
 	}
-	rf.dumpLogFields().Debug("snapshot: before compaction:")
-	lastIncludedEntry := rf.log[offset]
+	lastIncludedIndex := index
+	lastIncludedTerm := rf.log[index-baseIndex].Term
+	rf.trimLog(lastIncludedIndex, lastIncludedTerm)
 
-	// handle snapshot
-	rf.lastIncludedIndex = lastIncludedEntry.Index
-	rf.lastIncludedTerm = lastIncludedEntry.Term
+	rf.lastIncludedIndex = lastIncludedIndex
+	rf.lastIncludedTerm = lastIncludedTerm
 	rf.snapshot = snapshot
+	rf.persist()
+	// =================================
+	// defer rf.persist()
+	// rf.logger.WithFields(logrus.Fields{
+	// 	"index": index,
+	// }).Info("snapshot: got snapshot")
+	// // commitIndex始终小于等于maxIndex，所以不用担心
+	// baseIndex := rf.getBaseLogIndex()
+	// fields := logrus.Fields{
+	// 	"index": index, "commitIndex": rf.commitIndex, "baseIndex": baseIndex,
+	// }
+	// if rf.lastIncludedIndex >= index {
+	// 	return
+	// }
+	// if index > rf.commitIndex {
+	// 	rf.logger.WithFields(fields).Warn("snapshot: failed due to invalid index, index > rf.commitIndex")
+	// 	return
+	// } else {
+	// 	rf.logger.WithFields(fields).Info("snapshot: params:")
+	// }
+	// newIndex := index - baseIndex
+	// offset := newIndex - 1
+	// if newIndex == 0 {
+	// 	offset = 0
+	// }
+	// if offset < 0 {
+	// 	rf.logger.WithFields(logrus.Fields{
+	// 		"lastIncludedIindex": rf.lastIncludedIndex,
+	// 	}).Warn("snapshot: offset < 0, doing absolute nothing")
+	// 	return
+	// }
+	// rf.dumpLogFields().Debug("snapshot: before compaction:")
+	// lastIncludedEntry := rf.log[offset]
 
-	// log compaction
-	rf.log = rf.log[newIndex:]
+	// // handle snapshot
+	// rf.lastIncludedIndex = lastIncludedEntry.Index
+	// rf.lastIncludedTerm = lastIncludedEntry.Term
+	// rf.snapshot = snapshot
 
-	rf.dumpLogFields().WithFields(logrus.Fields{
-		"base": baseIndex, "len": newIndex, "lastIncludedIndex": lastIncludedEntry.Index,
-	}).Debug("snapshot: after compaction")
+	// // log compaction
+	// rf.log = rf.log[newIndex:]
+
+	// rf.dumpLogFields().WithFields(logrus.Fields{
+	// 	"base": baseIndex, "len": newIndex, "lastIncludedIndex": lastIncludedEntry.Index,
+	// }).Debug("snapshot: after compaction")
 }
 
 func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) {
@@ -86,6 +100,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		rf.state = STATE_FOLLOWER
 		rf.currentTerm = args.Term
 		rf.votedFor = -1
+		rf.persist()
 		rf.logger.WithField("newTerm", rf.currentTerm).
 			Info("snapshot: became follower due to higher client term")
 	}
@@ -98,15 +113,20 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		}).Warn("lastincludedindex <= baseindex, doing nothing")
 		return
 	}
-	rf.snapshot = args.Data
+	rf.trimLog(args.LastIncludedIndex, args.LastIncludedTerm)
 	rf.lastApplied = args.LastIncludedIndex
 	rf.commitIndex = args.LastIncludedIndex
-	rf.currentTerm = args.Term
-	rf.lastIncludedIndex = args.LastIncludedIndex
-	rf.lastIncludedTerm = args.LastIncludedTerm
-	rf.log = make([]LogEntry, 0)
-	rf.dumpLogFields().Debug("snapshot: log truncated")
-	// todo: ignore leaderid for now
+	rf.snapshot = args.Data
+	rf.persist()
+	// rf.snapshot = args.Data
+	// rf.lastApplied = args.LastIncludedIndex
+	// rf.commitIndex = args.LastIncludedIndex
+	// rf.currentTerm = args.Term
+	// rf.lastIncludedIndex = args.LastIncludedIndex
+	// rf.lastIncludedTerm = args.LastIncludedTerm
+	// rf.log = make([]LogEntry, 0)
+	// rf.dumpLogFields().Debug("snapshot: log truncated")
+	// // todo: ignore leaderid for now
 	msg := ApplyMsg{
 		CommandValid:  false,
 		SnapshotValid: true,
@@ -114,14 +134,9 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		SnapshotTerm:  args.Term,
 		SnapshotIndex: args.LastIncludedIndex + 1,
 	}
-	decoder := labgob.NewDecoder(bytes.NewBuffer(msg.Snapshot))
-	var val int
-	decoder.Decode(&val)
-	rf.logger.WithField("msg", msg).WithField("cmd", val).Debug("snapshot: snapshot msg")
 	rf.applyMsgQueue.put(msg)
 
 	// persist after state change
-	rf.persist()
 	rf.logger.Info("installed snapshot")
 	// baseIndex和lastLogIndex
 	// baseindex是当前log的第一条，用于后面append确定index
@@ -151,6 +166,7 @@ func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply
 			rf.votedFor = -1
 			rf.logger.WithField("newTerm", rf.currentTerm).
 				Info("snapshot: became follower due to higher client term")
+			rf.persist()
 			return false
 		}
 		rf.nextIndex[server] = common.Max(args.LastIncludedIndex+1, rf.nextIndex[server])
