@@ -37,6 +37,12 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	fields := logrus.Fields{
 		"index": index, "commitIndex": rf.commitIndex, "baseIndex": baseIndex,
 	}
+	if rf.lastIncludedIndex >= index {
+		return
+	}
+	if baseIndex > rf.commitIndex {
+		panic("invalid")
+	}
 	if index > rf.commitIndex {
 		rf.logger.WithFields(fields).Warn("snapshot: failed due to invalid index, index > rf.commitIndex")
 		return
@@ -48,7 +54,7 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	if newIndex == 0 {
 		offset = 0
 	}
-	if offset < 0 {
+	if offset < 0 || offset > len(rf.log)-1 {
 		rf.logger.WithFields(logrus.Fields{
 			"lastIncludedIindex": rf.lastIncludedIndex,
 		}).Warn("snapshot: offset < 0, doing absolute nothing")

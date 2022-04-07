@@ -183,9 +183,11 @@ func (rf *Raft) broadcastAppendEntries() {
 					"baseIndex":                          baseIndex,
 				}).Debug("broadcast: entries diff:")
 				if rf.nextIndex[server] < baseIndex {
-					if baseIndex > rf.commitIndex {
+					if baseIndex > rf.commitIndex+1 {
 						rf.logger.WithFields(logrus.Fields{
 							"commitindex": rf.commitIndex,
+							"log":         rf.log,
+							"baseIndex":   baseIndex,
 						}).Panic("broadcast: baseindex > commitindex, log is lost")
 					}
 					// 这里如果阻塞会有问题，如果snapshot很大，用时很长，可能会心跳超时
