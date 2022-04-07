@@ -27,8 +27,8 @@ func (gs *GenericService) HandleCall(ctx context.Context, in *raftpb.GenericArgs
 	decoder := labgob.NewDecoder(bytes.NewBuffer(in.Data))
 	outBuf := new(bytes.Buffer)
 	encoder := labgob.NewEncoder(outBuf)
-	switch in.Method {
-	case "Raft.AppendEntries":
+	switch *in.Method {
+	case raftpb.GenericArgs_AppendEntries:
 		args := raft.AppendEntriesArgs{}
 		err := decoder.Decode(&args)
 		if err != nil {
@@ -40,7 +40,7 @@ func (gs *GenericService) HandleCall(ctx context.Context, in *raftpb.GenericArgs
 		if err != nil {
 			panic(err)
 		}
-	case "Raft.RequestVote":
+	case raftpb.GenericArgs_RequestVote:
 		args := raft.RequestVoteArgs{}
 		err := decoder.Decode(&args)
 		if err != nil {
@@ -52,7 +52,7 @@ func (gs *GenericService) HandleCall(ctx context.Context, in *raftpb.GenericArgs
 		if err != nil {
 			panic(err)
 		}
-	case "Raft.InstallSnapshot":
+	case raftpb.GenericArgs_InstallSnapshot:
 		args := raft.InstallSnapshotArgs{}
 		err := decoder.Decode(&args)
 		if err != nil {
@@ -78,7 +78,16 @@ func (c *GRPCClient) Call(method string, args interface{}, reply interface{}) bo
 	if err != nil {
 		panic(err)
 	}
-	gArgs := raftpb.GenericArgs{Method: method, Data: buf.Bytes()}
+	var _method *raftpb.GenericArgs_Method
+	switch method {
+	case "Raft.AppendEntries":
+		_method = raftpb.GenericArgs_AppendEntries.Enum()
+	case "Raft.InstallSnapshot":
+		_method = raftpb.GenericArgs_InstallSnapshot.Enum()
+	case "Raft.RequestVote":
+		_method = raftpb.GenericArgs_RequestVote.Enum()
+	}
+	gArgs := raftpb.GenericArgs{Method: _method, Data: buf.Bytes()}
 	ctx := context.TODO()
 	clientDeadline := time.Now().Add(time.Duration(3 * time.Second))
 	ctx, cancel := context.WithDeadline(ctx, clientDeadline)

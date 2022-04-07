@@ -1,16 +1,49 @@
-syntax = "proto3";
+syntax = "proto2";
 
 option go_package = "./raftpb";
 
 message GenericArgs {
-    string method = 1;
-    bytes data = 2;
+    enum Method {
+        AppendEntries = 0;
+        RequestVote = 1;
+        InstallSnapshot = 2;
+    }
+    required Method method = 1;
+    required bytes data = 2;
 }
 
 message GenericReply {
-    bytes data = 1;
+    required bytes data = 1;
 }
 
 service GenericService {
     rpc HandleCall (GenericArgs) returns (GenericReply);
+}
+
+// message SMOperation {
+
+// }
+
+message RequestInfo {
+    required int64 clientID = 1;
+    required int64 requestID = 2;
+}
+
+message ServiceArgs {
+    enum OPType {
+        GET = 0;
+        PUT = 1;
+        APPEND = 2;
+        WATCH = 3;
+        LEASE = 4;
+    }
+    required OPType opType = 1;
+    required string opKey = 2;
+    required string opVal = 3;
+    required RequestInfo info = 4;
+}
+
+message ServiceReply {
+    required string err = 1;
+    optional string result = 2;
 }
