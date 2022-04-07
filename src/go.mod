@@ -10,6 +10,8 @@ require (
 	github.com/google/pprof v0.0.0-20220314021825-5bba342933ea // indirect
 	github.com/google/uuid v1.3.0
 	github.com/ianlancetaylor/demangle v0.0.0-20220203202831-b7f99f1dbc96 // indirect
+	github.com/lni/dragonboat/v3 v3.3.5
+	github.com/lni/goutils v1.3.0 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.13 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
