@@ -89,6 +89,7 @@ func (c *GRPCClient) Call(method string, args interface{}, reply interface{}) bo
 		fmt.Println(stat, ok)
 		return false
 	}
+
 	decoder := labgob.NewDecoder(bytes.NewBuffer(r.Data))
 	err = decoder.Decode(reply)
 	if err != nil {
@@ -126,11 +127,26 @@ func main() {
 		panic(err)
 	}
 	applyCh := make(chan raft.ApplyMsg)
+	go func() {
+		for msg := range applyCh {
+			fmt.Println("incoming message:", msg.CommandIndex)
+		}
+	}()
 	iclis := make([]raft.Callable, len(clis))
 	for i := range clis {
 		iclis[i] = clis[i]
 	}
 	rf := raft.Make(iclis, *me, raft.MakePersister(), applyCh)
+	go func() {
+		time.Sleep(3 * time.Second)
+		for {
+			_, k := rf.GetState()
+			if k {
+				rf.Start("helo")
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
 	gs := GenericService{
 		rf: rf,
 	}
