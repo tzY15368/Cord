@@ -1,0 +1,14 @@
+{
+    "addrs": [
+        "127.0.0.1:7001",
+        "127.0.0.1:7002",
+        "127.0.0.1:7003"
+    ],
+    "logLevel": {
+        "raft": "info",
+        "server": "debug",
+        "dataStore": "info"
+    },
+    "snapshotThres": 1000,
+    "me": -1
+}

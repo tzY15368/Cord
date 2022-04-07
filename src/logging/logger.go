@@ -18,6 +18,21 @@ func DropLogFile(name string) {
 	os.Remove(logFilename)
 }
 
+func PrepareLogger(name string, level string) {
+	lv := logrus.DebugLevel
+	switch level {
+	case "debug":
+		break
+	case "info":
+		lv = logrus.InfoLevel
+	case "warn":
+		lv = logrus.WarnLevel
+	default:
+		panic("logger: invalid log level:" + level)
+	}
+	GetLogger(name, lv)
+}
+
 func GetLogger(name string, level logrus.Level) *logrus.Logger {
 	mu.Lock()
 	defer mu.Unlock()
