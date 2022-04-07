@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option go_package = "./raftpb";
+
+message GenericArgs {
+    string method = 1;
+    bytes data = 2;
+}
+
+message GenericReply {
+    bytes data = 1;
+}
+
+service GenericService {
+    rpc HandleCall (GenericArgs) returns (GenericReply);
+}

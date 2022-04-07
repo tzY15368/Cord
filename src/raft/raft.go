@@ -1,3 +1,5 @@
+//go:generate protoc --gofast_out=plugins=grpc:. raft.proto
+
 package raft
 
 import (
@@ -7,13 +9,9 @@ import (
 	"time"
 
 	"6.824/common"
-	"6.824/labrpc"
 	"6.824/logging"
 	"github.com/sirupsen/logrus"
 )
-
-// import "bytes"
-// import "labgob"
 
 //
 // A Go object implementing a single Raft peer.
@@ -21,9 +19,9 @@ import (
 type Raft struct {
 	//mu        sync.Mutex          // Lock to protect shared access to this peer's state
 	mu        *mutex
-	peers     []*labrpc.ClientEnd // RPC end points of all peers
-	persister *Persister          // Object to hold this peer's persisted state
-	me        int                 // this peer's index into peers[]
+	peers     []Callable // RPC end points of all peers
+	persister *Persister // Object to hold this peer's persisted state
+	me        int        // this peer's index into peers[]
 
 	// Your data here (2A, 2B, 2C).
 	// Look at the paper's Figure 2 for a description of what
@@ -179,7 +177,11 @@ func (rf *Raft) ticker() {
 	}
 }
 
-func Make(peers []*labrpc.ClientEnd, me int,
+type Callable interface {
+	Call(string, interface{}, interface{}) bool
+}
+
+func Make(peers []Callable, me int,
 	persister *Persister, applyCh chan ApplyMsg) *Raft {
 	rf := &Raft{}
 	rf.peers = peers
