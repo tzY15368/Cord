@@ -1,4 +1,4 @@
-package handlers
+package raft
 
 import (
 	"bytes"
@@ -8,7 +8,6 @@ import (
 
 	"6.824/labgob"
 	"6.824/proto"
-	"6.824/raft"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 )
@@ -17,47 +16,43 @@ type GRPCClient struct {
 	Conn *grpc.ClientConn
 }
 
-type RaftInternalRPCService struct {
-	Rf *raft.Raft
-}
-
-func (gs *RaftInternalRPCService) HandleCall(ctx context.Context, in *proto.GenericArgs) (*proto.GenericReply, error) {
+func (rf *Raft) HandleCall(ctx context.Context, in *proto.GenericArgs) (*proto.GenericReply, error) {
 	decoder := labgob.NewDecoder(bytes.NewBuffer(in.Data))
 	outBuf := new(bytes.Buffer)
 	encoder := labgob.NewEncoder(outBuf)
 	switch *in.Method {
 	case proto.GenericArgs_AppendEntries:
-		args := raft.AppendEntriesArgs{}
+		args := AppendEntriesArgs{}
 		err := decoder.Decode(&args)
 		if err != nil {
 			panic(err)
 		}
-		reply := raft.AppendEntriesReply{}
-		gs.Rf.AppendEntries(&args, &reply)
+		reply := AppendEntriesReply{}
+		rf.AppendEntries(&args, &reply)
 		err = encoder.Encode(reply)
 		if err != nil {
 			panic(err)
 		}
 	case proto.GenericArgs_RequestVote:
-		args := raft.RequestVoteArgs{}
+		args := RequestVoteArgs{}
 		err := decoder.Decode(&args)
 		if err != nil {
 			panic(err)
 		}
-		reply := raft.RequestVoteReply{}
-		gs.Rf.RequestVote(&args, &reply)
+		reply := RequestVoteReply{}
+		rf.RequestVote(&args, &reply)
 		err = encoder.Encode(reply)
 		if err != nil {
 			panic(err)
 		}
 	case proto.GenericArgs_InstallSnapshot:
-		args := raft.InstallSnapshotArgs{}
+		args := InstallSnapshotArgs{}
 		err := decoder.Decode(&args)
 		if err != nil {
 			panic(err)
 		}
-		reply := raft.InstallSnapshotReply{}
-		gs.Rf.InstallSnapshot(&args, &reply)
+		reply := InstallSnapshotReply{}
+		rf.InstallSnapshot(&args, &reply)
 		err = encoder.Encode(reply)
 		if err != nil {
 			panic(err)

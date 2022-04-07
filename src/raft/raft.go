@@ -3,10 +3,12 @@ package raft
 import (
 	"fmt"
 	"math/rand"
+	"reflect"
 	"sync/atomic"
 	"time"
 
 	"6.824/common"
+	"6.824/labrpc"
 	"6.824/logging"
 	"github.com/sirupsen/logrus"
 )
@@ -179,10 +181,32 @@ type Callable interface {
 	Call(string, interface{}, interface{}) bool
 }
 
-func Make(peers []Callable, me int,
+func Make(ipeers interface{}, me int,
 	persister *Persister, applyCh chan ApplyMsg) *Raft {
 	rf := &Raft{}
-	rf.peers = peers
+	peers, ok := ipeers.([]*labrpc.ClientEnd)
+	if ok {
+		fmt.Println("using labrpc")
+		iends := make([]Callable, len(peers))
+		for i := range iends {
+			iends[i] = peers[i]
+		}
+		rf.peers = iends
+	}
+	peers2, ok2 := ipeers.([]*GRPCClient)
+	if ok2 {
+		fmt.Println("using grpc")
+		iclis := make([]Callable, len(peers2))
+		for i := range peers {
+			iclis[i] = peers[i]
+		}
+		rf.peers = iclis
+	}
+
+	if len(rf.peers) == 0 {
+		panic("startup failed" + "type:" + fmt.Sprintf("%+v", reflect.TypeOf(ipeers)))
+	}
+
 	rf.persister = persister
 	rf.me = me
 	rf.mu = makeLock(rf)

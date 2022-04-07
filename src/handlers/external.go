@@ -1,7 +1,6 @@
 package handlers
 
-type CORDExternalService struct {
-	RaftInternalRPCService
+type CORDService struct {
 }
 
 //func (ce *CORDExternalService) HandleRequest(ctx context.Context, in )
