@@ -6,9 +6,9 @@ import (
 	"net"
 	"time"
 
-	"6.824/internals"
+	"6.824/handlers"
+	"6.824/proto"
 	"6.824/raft"
-	"6.824/raft/raftpb"
 	"google.golang.org/grpc"
 )
 
@@ -18,7 +18,7 @@ func main() {
 		"127.0.0.1:6001",
 		"127.0.0.1:6002",
 	}
-	var clis []*internals.GRPCClient
+	var clis []*handlers.GRPCClient
 	me := flag.Int("me", -1, "rf.me")
 	flag.Parse()
 	for i, addr := range addrs {
@@ -29,7 +29,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		cli := &internals.GRPCClient{
+		cli := &handlers.GRPCClient{
 			Conn: conn,
 		}
 		clis = append(clis, cli)
@@ -60,11 +60,11 @@ func main() {
 			time.Sleep(1 * time.Second)
 		}
 	}()
-	gs := internals.RaftInternalRPCService{
+	gs := handlers.RaftInternalRPCService{
 		Rf: rf,
 	}
 	fmt.Println("serving on addr", addrs[*me])
 
-	raftpb.RegisterGenericServiceServer(server, &gs)
+	proto.RegisterGenericServiceServer(server, &gs)
 	server.Serve(listener)
 }

@@ -1,6 +1,6 @@
 syntax = "proto2";
 
-option go_package = "./raftpb";
+option go_package = "proto";
 
 message GenericArgs {
     enum Method {
@@ -41,6 +41,10 @@ message ServiceArgs {
     required string opKey = 2;
     required string opVal = 3;
     required RequestInfo info = 4;
+}
+
+service ExternalService {
+    rpc HandleRequest (ServiceArgs) returns (ServiceReply);
 }
 
 message ServiceReply {

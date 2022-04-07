@@ -1,5 +1,3 @@
-//go:generate protoc --gofast_out=plugins=grpc:. raft.proto
-
 package raft
 
 import (

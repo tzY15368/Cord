@@ -1,4 +1,4 @@
-package internals
+package handlers
 
 import (
 	"bytes"
@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"6.824/labgob"
+	"6.824/proto"
 	"6.824/raft"
-	"6.824/raft/raftpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 )
@@ -21,12 +21,12 @@ type RaftInternalRPCService struct {
 	Rf *raft.Raft
 }
 
-func (gs *RaftInternalRPCService) HandleCall(ctx context.Context, in *raftpb.GenericArgs) (*raftpb.GenericReply, error) {
+func (gs *RaftInternalRPCService) HandleCall(ctx context.Context, in *proto.GenericArgs) (*proto.GenericReply, error) {
 	decoder := labgob.NewDecoder(bytes.NewBuffer(in.Data))
 	outBuf := new(bytes.Buffer)
 	encoder := labgob.NewEncoder(outBuf)
 	switch *in.Method {
-	case raftpb.GenericArgs_AppendEntries:
+	case proto.GenericArgs_AppendEntries:
 		args := raft.AppendEntriesArgs{}
 		err := decoder.Decode(&args)
 		if err != nil {
@@ -38,7 +38,7 @@ func (gs *RaftInternalRPCService) HandleCall(ctx context.Context, in *raftpb.Gen
 		if err != nil {
 			panic(err)
 		}
-	case raftpb.GenericArgs_RequestVote:
+	case proto.GenericArgs_RequestVote:
 		args := raft.RequestVoteArgs{}
 		err := decoder.Decode(&args)
 		if err != nil {
@@ -50,7 +50,7 @@ func (gs *RaftInternalRPCService) HandleCall(ctx context.Context, in *raftpb.Gen
 		if err != nil {
 			panic(err)
 		}
-	case raftpb.GenericArgs_InstallSnapshot:
+	case proto.GenericArgs_InstallSnapshot:
 		args := raft.InstallSnapshotArgs{}
 		err := decoder.Decode(&args)
 		if err != nil {
@@ -65,27 +65,27 @@ func (gs *RaftInternalRPCService) HandleCall(ctx context.Context, in *raftpb.Gen
 	default:
 		panic(in.Method)
 	}
-	return &raftpb.GenericReply{Data: outBuf.Bytes()}, nil
+	return &proto.GenericReply{Data: outBuf.Bytes()}, nil
 }
 
 func (c *GRPCClient) Call(method string, args interface{}, reply interface{}) bool {
-	c2 := raftpb.NewGenericServiceClient(c.Conn)
+	c2 := proto.NewGenericServiceClient(c.Conn)
 	buf := new(bytes.Buffer)
 	encoder := labgob.NewEncoder(buf)
 	err := encoder.Encode(args)
 	if err != nil {
 		panic(err)
 	}
-	var _method *raftpb.GenericArgs_Method
+	var _method *proto.GenericArgs_Method
 	switch method {
 	case "Raft.AppendEntries":
-		_method = raftpb.GenericArgs_AppendEntries.Enum()
+		_method = proto.GenericArgs_AppendEntries.Enum()
 	case "Raft.InstallSnapshot":
-		_method = raftpb.GenericArgs_InstallSnapshot.Enum()
+		_method = proto.GenericArgs_InstallSnapshot.Enum()
 	case "Raft.RequestVote":
-		_method = raftpb.GenericArgs_RequestVote.Enum()
+		_method = proto.GenericArgs_RequestVote.Enum()
 	}
-	gArgs := raftpb.GenericArgs{Method: _method, Data: buf.Bytes()}
+	gArgs := proto.GenericArgs{Method: _method, Data: buf.Bytes()}
 	ctx := context.TODO()
 	clientDeadline := time.Now().Add(time.Duration(3 * time.Second))
 	ctx, cancel := context.WithDeadline(ctx, clientDeadline)
