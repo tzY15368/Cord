@@ -10,5 +10,6 @@
         "dataStore": "info"
     },
     "snapshotThres": 1000,
-    "me": -1
+    "me": -1,
+    "applyTimeoutMil": 800
 }
