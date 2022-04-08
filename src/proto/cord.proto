@@ -7,6 +7,7 @@ message GenericArgs {
         AppendEntries = 0;
         RequestVote = 1;
         InstallSnapshot = 2;
+        Start = 3;
     }
     required Method method = 1;
     required bytes data = 2;

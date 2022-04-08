@@ -90,3 +90,9 @@ type InstallSnapshotReply struct {
 	// currentTerm, for leader to update itself
 	Term int
 }
+
+type StartReply struct {
+	Index    int
+	Term     int
+	IsLeader bool
+}

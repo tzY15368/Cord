@@ -57,6 +57,22 @@ func (rf *Raft) HandleCall(ctx context.Context, in *proto.GenericArgs) (*proto.G
 		if err != nil {
 			panic(err)
 		}
+	case proto.GenericArgs_Start:
+		var args interface{}
+		err := decoder.Decode(&args)
+		if err != nil {
+			panic(err)
+		}
+		index, term, isLeader := rf.Start(args)
+		reply := StartReply{
+			Index:    index,
+			Term:     term,
+			IsLeader: isLeader,
+		}
+		err = encoder.Encode(&reply)
+		if err != nil {
+			panic(err)
+		}
 	default:
 		panic(in.Method)
 	}
@@ -79,16 +95,18 @@ func (c *GRPCClient) Call(method string, args interface{}, reply interface{}) bo
 		_method = proto.GenericArgs_InstallSnapshot.Enum()
 	case "Raft.RequestVote":
 		_method = proto.GenericArgs_RequestVote.Enum()
+	case "Raft.Start":
+		_method = proto.GenericArgs_Start.Enum()
 	}
 	gArgs := proto.GenericArgs{Method: _method, Data: buf.Bytes()}
 	ctx := context.TODO()
-	clientDeadline := time.Now().Add(time.Duration(3 * time.Second))
+	clientDeadline := time.Now().Add(time.Duration(1 * time.Second))
 	ctx, cancel := context.WithDeadline(ctx, clientDeadline)
-	defer cancel()
+	_ = cancel
 	r, err := c2.HandleCall(ctx, &gArgs)
 	if err != nil {
-		stat, ok := status.FromError(err)
-		fmt.Println(stat, ok)
+		stat, _ := status.FromError(err)
+		fmt.Println(method, fmt.Sprintf("%+v", args), stat)
 		return false
 	}
 

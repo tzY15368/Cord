@@ -38,6 +38,7 @@ type Raft struct {
 	// Volatile state on all servers.
 	commitIndex int
 	lastApplied int
+	leaderID    int
 
 	// Volatile state on leaders.
 	nextIndex  []int
@@ -84,7 +85,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 
 	term, index := 0, 0
 	isLeader := (rf.state == STATE_LEADER)
-
+	fmt.Println("got lock")
 	// TODO(problem): leader doesn't have data log
 	if isLeader {
 		term = rf.currentTerm
@@ -92,6 +93,16 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		rf.logger.WithField("command", command).WithField("at", time.Now()).Info("start: got command")
 		rf.log = append(rf.log, LogEntry{Index: index, Term: term, Command: command})
 		go rf.broadcastAppendEntries()
+	} else {
+		fmt.Println("isn't leader, consulting", rf.leaderID)
+		// reply := StartReply{}
+		// ok := rf.peers[rf.leaderID].Call("Raft.Start", command, &reply)
+		// if !ok {
+		// 	fmt.Println("consult fail (net)")
+		// 	return -1, -1, false
+		// }
+		// return reply.Index, reply.Term, reply.IsLeader
+
 	}
 
 	return index, term, isLeader

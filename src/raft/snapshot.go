@@ -125,7 +125,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	decoder.Decode(&val)
 	rf.logger.WithField("msg", msg).WithField("cmd", val).Debug("snapshot: snapshot msg")
 	rf.applyMsgQueue.put(msg)
-
+	rf.leaderID = args.LeaderID
 	// persist after state change
 	rf.persist()
 	rf.logger.Info("installed snapshot")

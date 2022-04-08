@@ -46,7 +46,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	// 待优化
 	baseIndex := rf.getBaseLogIndex()
 	// baseIndex := rf.log[0].Index
-
+	rf.leaderID = args.LeaderId
 	if args.PrevLogIndex >= baseIndex && args.PrevLogTerm != rf.getLogTermAtOffset(args.PrevLogIndex-baseIndex) {
 		// if entry log[prevLogIndex] conflicts with new one, there may be conflict entries before.
 		// we can bypass all entries during the problematic term to speed up.
