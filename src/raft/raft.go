@@ -197,8 +197,11 @@ func Make(ipeers interface{}, me int,
 	if ok2 {
 		fmt.Println("using grpc")
 		iclis := make([]Callable, len(peers2))
-		for i := range peers {
-			iclis[i] = peers[i]
+		for i := range peers2 {
+			if i != me && peers2[i] == nil {
+				panic("nil client")
+			}
+			iclis[i] = peers2[i]
 		}
 		rf.peers = iclis
 	}
