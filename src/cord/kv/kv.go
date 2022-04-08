@@ -77,8 +77,14 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (r
 			reply.Data[*cmd.OpKey] = kvs.dataStore.Data[*cmd.OpKey]
 		case proto.CmdArgs_APPEND:
 			kvs.dataStore.Data[*cmd.OpKey] += *cmd.OpVal
+			for _, handler := range kvs.dataChangeHandlers {
+				handler(*cmd.OpKey, kvs.dataStore.Data[*cmd.OpKey])
+			}
 		case proto.CmdArgs_PUT:
 			kvs.dataStore.Data[*cmd.OpKey] = *cmd.OpVal
+			for _, handler := range kvs.dataChangeHandlers {
+				handler(*cmd.OpKey, *cmd.OpVal)
+			}
 		default:
 			reply.Err = ErrNotImpl
 			return
