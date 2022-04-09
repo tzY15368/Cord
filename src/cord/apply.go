@@ -1,6 +1,7 @@
 package cord
 
 import (
+	"fmt"
 	"reflect"
 	"sync/atomic"
 
@@ -28,8 +29,9 @@ func (cs *CordServer) handleApply() {
 			if !ok {
 				panic("conversion error:" + reflect.TypeOf(msg.Command).String())
 			}
-			var res *kv.EvalResult
-			if !*args.Linearizable {
+			fmt.Println("inbound command: ", msg.CommandIndex)
+			var res = &kv.EvalResult{}
+			if !args.Linearizable {
 				res = cs.kvStore.EvalGETUnserializable(&args)
 			} else {
 				ss := cs.tryStartSnapshot()

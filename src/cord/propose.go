@@ -39,7 +39,7 @@ func (cs *CordServer) propose(args proto.ServiceArgs) *kv.EvalResult {
 	lostLeaderChan := make(chan struct{}, 1)
 	go func() {
 		res := cs.waitForApply(int64(index))
-		if res.Info.ClientID != args.Info.ClientID || res.Info.RequestID != args.Info.RequestID {
+		if res.Info == nil || res.Info.ClientID != args.Info.ClientID || res.Info.RequestID != args.Info.RequestID {
 			cs.logger.WithField("index", index).Warn("server: propose: different info on index")
 			lostLeaderChan <- struct{}{}
 		} else {

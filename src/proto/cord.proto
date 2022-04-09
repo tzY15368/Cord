@@ -1,4 +1,4 @@
-syntax = "proto2";
+syntax = "proto3";
 
 option go_package = "proto";
 
@@ -9,12 +9,12 @@ message GenericArgs {
         InstallSnapshot = 2;
         Start = 3;
     }
-    required Method method = 1;
-    required bytes data = 2;
+    Method method = 1;
+    bytes data = 2;
 }
 
 message GenericReply {
-    required bytes data = 1;
+    bytes data = 1;
 }
 
 service GenericService {
@@ -26,8 +26,8 @@ service GenericService {
 // }
 
 message RequestInfo {
-    required int64 clientID = 1;
-    required int64 requestID = 2;
+    int64 clientID = 1;
+    int64 requestID = 2;
 }
 
 message CmdArgs {
@@ -38,15 +38,15 @@ message CmdArgs {
         WATCH = 3;
         LEASE = 4;
     }
-    required OPType opType = 1;
-    required string opKey = 2;
-    required string opVal = 3;
+    OPType opType = 1;
+    string opKey = 2;
+    string opVal = 3;
 }
 
 message ServiceArgs {
     repeated CmdArgs cmds = 1;
-    required RequestInfo info = 4;
-    optional bool linearizable = 5;// 如果是false，则cmds里任意写都不走raft同步，不保证一致性读
+    RequestInfo info = 4;
+    bool linearizable = 5;// 如果是false，则cmds里任意写都不走raft同步，不保证一致性读
 }
 
 service ExternalService {

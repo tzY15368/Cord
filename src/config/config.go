@@ -31,6 +31,7 @@ func (cc *CordConfig) MakeGRPCClients() []*raft.GRPCClient {
 	for i, addr := range cc.Addrs {
 		if i == cc.Me {
 			clis = append(clis, nil)
+			continue
 		}
 		conn, err := grpc.Dial(addr, grpc.WithInsecure())
 		if err != nil {

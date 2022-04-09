@@ -1,6 +1,8 @@
 package common
 
 import (
+	"crypto/rand"
+	"math/big"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -39,4 +41,11 @@ type RequestInfo struct {
 
 func (ri1 *RequestInfo) Equals(ri2 *RequestInfo) bool {
 	return ri1.ClientID == ri2.ClientID && ri1.RequestID == ri2.RequestID
+}
+
+func Nrand() int64 {
+	max := big.NewInt(int64(1) << 62)
+	bigx, _ := rand.Int(rand.Reader, max)
+	x := bigx.Int64()
+	return x
 }

@@ -40,25 +40,25 @@ func (kvs *TempKVStore) RegisterDataChangeHandler(in func(string, string)) {
 }
 
 func (kvs *TempKVStore) EvalGETUnserializable(args *proto.ServiceArgs) (reply *EvalResult) {
-	reply.Data = make(map[string]string)
+	reply = &EvalResult{Data: make(map[string]string), Info: args.Info}
 	kvs.mu.RLock()
 	defer kvs.mu.RUnlock()
 	for _, cmd := range args.Cmds {
-		if *cmd.OpType != proto.CmdArgs_GET {
+		if cmd.OpType != proto.CmdArgs_GET {
 			reply.Err = ErrGetOnly
 			return
 		}
-		reply.Data[*cmd.OpKey] = kvs.dataStore.Data[*cmd.OpKey]
+		reply.Data[cmd.OpKey] = kvs.dataStore.Data[cmd.OpKey]
 	}
 	return
 }
 
 func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (reply *EvalResult, dump *[]byte) {
-	reply.Data = make(map[string]string)
+	reply = &EvalResult{Data: make(map[string]string), Info: args.Info}
 	var lockWrite = shouldSnapshot
 	if !shouldSnapshot {
 		for _, cmd := range args.Cmds {
-			if *cmd.OpType != proto.CmdArgs_GET {
+			if cmd.OpType != proto.CmdArgs_GET {
 				lockWrite = true
 				break
 			}
@@ -72,18 +72,18 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (r
 		defer kvs.mu.RUnlock()
 	}
 	for _, cmd := range args.Cmds {
-		switch *cmd.OpType {
+		switch cmd.OpType {
 		case proto.CmdArgs_GET:
-			reply.Data[*cmd.OpKey] = kvs.dataStore.Data[*cmd.OpKey]
+			reply.Data[cmd.OpKey] = kvs.dataStore.Data[cmd.OpKey]
 		case proto.CmdArgs_APPEND:
-			kvs.dataStore.Data[*cmd.OpKey] += *cmd.OpVal
+			kvs.dataStore.Data[cmd.OpKey] += cmd.OpVal
 			for _, handler := range kvs.dataChangeHandlers {
-				handler(*cmd.OpKey, kvs.dataStore.Data[*cmd.OpKey])
+				handler(cmd.OpKey, kvs.dataStore.Data[cmd.OpKey])
 			}
 		case proto.CmdArgs_PUT:
-			kvs.dataStore.Data[*cmd.OpKey] = *cmd.OpVal
+			kvs.dataStore.Data[cmd.OpKey] = cmd.OpVal
 			for _, handler := range kvs.dataChangeHandlers {
-				handler(*cmd.OpKey, *cmd.OpVal)
+				handler(cmd.OpKey, cmd.OpVal)
 			}
 		default:
 			reply.Err = ErrNotImpl

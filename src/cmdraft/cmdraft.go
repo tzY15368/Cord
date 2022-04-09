@@ -49,19 +49,24 @@ func main() {
 	applyCh := make(chan raft.ApplyMsg)
 	go func() {
 		for msg := range applyCh {
-			fmt.Println("incoming message:", msg.CommandIndex)
+			fmt.Println("incoming message:", msg.CommandIndex, msg.Command)
 		}
 	}()
 	rf := raft.Make(clis, *me, raft.MakePersister(), applyCh)
 	go func() {
 		time.Sleep(3 * time.Second)
-		i := 0
-		for {
+		for i := 0; ; i++ {
 			//_, k := rf.GetState()
 			//if k {
-			fmt.Println("________start____________")
-			rf.Start("helo" + strconv.Itoa(i))
-			fmt.Println("-----------------")
+			if i%3 == *me {
+				v := "helo" + strconv.Itoa(i)
+				rf.Start(proto.ServiceArgs{
+					Cmds: []*proto.CmdArgs{{
+						OpType: proto.CmdArgs_GET,
+						OpKey:  v,
+					}},
+				})
+			}
 			//}
 			time.Sleep(1 * time.Second)
 		}

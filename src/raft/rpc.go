@@ -16,11 +16,15 @@ type GRPCClient struct {
 	Conn *grpc.ClientConn
 }
 
+func init() {
+	labgob.Register(proto.ServiceArgs{})
+}
+
 func (rf *Raft) HandleCall(ctx context.Context, in *proto.GenericArgs) (*proto.GenericReply, error) {
 	decoder := labgob.NewDecoder(bytes.NewBuffer(in.Data))
 	outBuf := new(bytes.Buffer)
 	encoder := labgob.NewEncoder(outBuf)
-	switch *in.Method {
+	switch in.Method {
 	case proto.GenericArgs_AppendEntries:
 		args := AppendEntriesArgs{}
 		err := decoder.Decode(&args)
@@ -58,12 +62,13 @@ func (rf *Raft) HandleCall(ctx context.Context, in *proto.GenericArgs) (*proto.G
 			panic(err)
 		}
 	case proto.GenericArgs_Start:
-		var args interface{}
-		err := decoder.Decode(&args)
+		//a :=
+		var a = proto.ServiceArgs{}
+		err := decoder.Decode(&a)
 		if err != nil {
 			panic(err)
 		}
-		index, term, isLeader := rf.Start(args)
+		index, term, isLeader := rf.Start(a)
 		reply := StartReply{
 			Index:    index,
 			Term:     term,
@@ -87,16 +92,16 @@ func (c *GRPCClient) Call(method string, args interface{}, reply interface{}) bo
 	if err != nil {
 		panic(err)
 	}
-	var _method *proto.GenericArgs_Method
+	var _method proto.GenericArgs_Method
 	switch method {
 	case "Raft.AppendEntries":
-		_method = proto.GenericArgs_AppendEntries.Enum()
+		_method = proto.GenericArgs_AppendEntries
 	case "Raft.InstallSnapshot":
-		_method = proto.GenericArgs_InstallSnapshot.Enum()
+		_method = proto.GenericArgs_InstallSnapshot
 	case "Raft.RequestVote":
-		_method = proto.GenericArgs_RequestVote.Enum()
+		_method = proto.GenericArgs_RequestVote
 	case "Raft.Start":
-		_method = proto.GenericArgs_Start.Enum()
+		_method = proto.GenericArgs_Start
 	}
 	gArgs := proto.GenericArgs{Method: _method, Data: buf.Bytes()}
 	ctx := context.TODO()

@@ -81,29 +81,33 @@ func (rf *Raft) GetStateSize() int {
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	// Your code here (2B).
 	rf.mu.Lock()
-	defer rf.mu.Unlock()
 
 	term, index := 0, 0
 	isLeader := (rf.state == STATE_LEADER)
-	// TODO(problem): leader doesn't have data log
 	if isLeader {
 		term = rf.currentTerm
 		index = rf.getLastLogIndex() + 1
 		rf.logger.WithField("command", command).WithField("at", time.Now()).Info("start: got command")
 		rf.log = append(rf.log, LogEntry{Index: index, Term: term, Command: command})
 		go rf.broadcastAppendEntries()
+		rf.mu.Unlock()
 	} else {
 		fmt.Println("isn't leader, consulting", rf.leaderID)
-		// reply := StartReply{}
-		// ok := rf.peers[rf.leaderID].Call("Raft.Start", command, &reply)
-		// if !ok {
-		// 	fmt.Println("consult fail (net)")
-		// 	return -1, -1, false
-		// }
-		// return reply.Index, reply.Term, reply.IsLeader
+		leader := rf.leaderID
+		rf.mu.Unlock()
+		reply := StartReply{}
+		if leader == rf.me {
+			goto Return
+		}
+		ok := rf.peers[leader].Call("Raft.Start", command, &reply)
+		if !ok {
+			fmt.Println("consult fail (net)")
+			return -1, -1, false
+		}
+		return reply.Index, reply.Term, reply.IsLeader
 
 	}
-
+Return:
 	return index, term, isLeader
 }
 
