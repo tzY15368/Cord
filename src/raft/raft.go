@@ -85,7 +85,6 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 
 	term, index := 0, 0
 	isLeader := (rf.state == STATE_LEADER)
-	fmt.Println("got lock")
 	// TODO(problem): leader doesn't have data log
 	if isLeader {
 		term = rf.currentTerm

@@ -4,11 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	"6.824/proto"
 	"6.824/raft"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 )
 
 func main() {
@@ -20,11 +22,17 @@ func main() {
 	var clis []*raft.GRPCClient
 	me := flag.Int("me", -1, "rf.me")
 	flag.Parse()
+	var kacp = keepalive.ClientParameters{
+		Time:                1 * time.Second, // send pings every 10 seconds if there is no activity
+		Timeout:             time.Second / 2, // wait 1 second for ping back
+		PermitWithoutStream: true,            // send pings even without active streams
+	}
 	for i, addr := range addrs {
 		if i == *me {
 			clis = append(clis, nil)
+			continue
 		}
-		conn, err := grpc.Dial(addr, grpc.WithInsecure())
+		conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithKeepaliveParams(kacp))
 		if err != nil {
 			panic(err)
 		}
@@ -47,11 +55,14 @@ func main() {
 	rf := raft.Make(clis, *me, raft.MakePersister(), applyCh)
 	go func() {
 		time.Sleep(3 * time.Second)
+		i := 0
 		for {
-			_, k := rf.GetState()
-			if k {
-				rf.Start("helo")
-			}
+			//_, k := rf.GetState()
+			//if k {
+			fmt.Println("________start____________")
+			rf.Start("helo" + strconv.Itoa(i))
+			fmt.Println("-----------------")
+			//}
 			time.Sleep(1 * time.Second)
 		}
 	}()

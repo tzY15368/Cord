@@ -4,8 +4,6 @@ import (
 	"runtime/debug"
 	"sync"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 type mutex struct {
@@ -25,15 +23,16 @@ func makeLock(rf *Raft) *mutex {
 	return mu
 }
 
-func (m *mutex) Lock() {
+var DEBUG = false
 
-	//logrus.Warn("getting lock:", string(debug.Stack()))
+func (m *mutex) Lock() {
+	//fmt.Println("getting lock:", string(debug.Stack()))
 	m.mu.Lock()
 	// m.lockAt = time.Now()
 	// m.stack = string(debug.Stack())
-	if false && m.rf.state == STATE_LEADER {
+	if DEBUG && m.rf.state == STATE_LEADER {
 
-		logrus.Warnf("[%d]got lock at %s:%s", m.rf.me, time.Now(), string(debug.Stack()))
+		m.rf.logger.Warnf("[%d]got lock at %s:%s", m.rf.me, time.Now(), string(debug.Stack()))
 	}
 	// go func() {
 	// 	select {
@@ -47,11 +46,12 @@ func (m *mutex) Lock() {
 }
 
 func (m *mutex) Unlock() {
-	if false && m.rf.state == STATE_LEADER {
-		logrus.Warnf("[%d]releasing lock at %s:%s", m.rf.me, time.Now(), string(debug.Stack()))
+	if DEBUG && m.rf.state == STATE_LEADER {
+		m.rf.logger.Warnf("[%d]releasing lock at %s:%s", m.rf.me, time.Now(), string(debug.Stack()))
 	}
 	//debug.PrintStack()
 	//m.releaseChan <- struct{}{}
 	m.mu.Unlock()
 	//logrus.Warn("released lock,", runtime.NumGoroutine(), string(debug.Stack()))
+
 }
