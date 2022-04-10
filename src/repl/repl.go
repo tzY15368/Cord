@@ -1,28 +1,22 @@
-package main
+package repl
 
 import (
 	"bufio"
 	"context"
 	"fmt"
-	"net"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
-	"6.824/config"
-	"6.824/cord"
-	"6.824/logging"
 	"6.824/proto"
-	"google.golang.org/grpc"
 )
 
-const (
-	outBoundPortBase = 7500
-)
+type IRepl interface {
+	HandleRequest(context.Context, *proto.ServiceArgs) (*proto.ServiceReply, error)
+	CreateRequestInfo() proto.RequestInfo
+}
 
-func repl(cs *cord.CordServer) {
+func RunREPL(repler IRepl) {
 	reader := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Printf(">_ ")
@@ -68,12 +62,12 @@ func repl(cs *cord.CordServer) {
 			}
 		}
 		args.Linearizable = linearizable
-		if cs != nil {
+		if repler != nil {
 
-			info := cs.CreateRequestInfo()
+			info := repler.CreateRequestInfo()
 			args.Info = &info
 			ctx, _ := context.WithTimeout(context.TODO(), 2*time.Second)
-			reply, err := cs.HandleRequest(ctx, args)
+			reply, err := repler.HandleRequest(ctx, args)
 			if err != nil {
 				fmt.Printf("got error: %s\n", err.Error())
 			} else {
@@ -81,35 +75,4 @@ func repl(cs *cord.CordServer) {
 			}
 		}
 	}
-}
-
-func main() {
-	config := config.LoadConfig("config.json")
-	logging.PrepareLogger("raft", config.LogLevel.Raft)
-	logging.PrepareLogger("server", config.LogLevel.Server)
-	logging.PrepareLogger("dataStore", config.LogLevel.Datastore)
-
-	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", outBoundPortBase+config.Me))
-	if err != nil {
-		panic(err)
-	}
-	server := grpc.NewServer()
-	cordServer := cord.NewCordServer(config)
-	proto.RegisterExternalServiceServer(server, cordServer)
-	fmt.Printf("server: starting with config:\n %+v\n", config)
-	fmt.Printf("server: outbound: listening on %s\n", listener.Addr())
-	if config.StartWithCLI {
-		go func() {
-			repl(cordServer)
-			//repl(nil)
-		}()
-	}
-	go func() {
-		c := make(chan os.Signal, 2)
-		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-		<-c
-		fmt.Println("ctrl-c")
-		os.Exit(2)
-	}()
-	server.Serve(listener)
 }
