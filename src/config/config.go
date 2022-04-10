@@ -23,6 +23,8 @@ type CordConfig struct {
 	SnapshotThres   int
 	Me              int
 	ApplyTimeoutMil int
+	WatchEnabled    bool
+	StartWithCLI    bool
 }
 
 func (cc *CordConfig) MakeGRPCClients() []*raft.GRPCClient {
@@ -59,9 +61,11 @@ func LoadConfig(cfgPath string) *CordConfig {
 	if err != nil {
 		panic(err)
 	}
+	me := flag.Int("me", -1, "rf.me")
+	cli := flag.Bool("cli", false, "start with cli")
+	flag.Parse()
+	c.StartWithCLI = *cli
 	if c.Me == -1 {
-		me := flag.Int("me", -1, "rf.me")
-		flag.Parse()
 		if *me == -1 || *me > len(c.Addrs)-1 {
 			fmt.Println("me should be in range [0,n)")
 			os.Exit(1)

@@ -19,9 +19,9 @@ import (
 )
 
 type IKVStore interface {
+	EvalCMDUnlinearizable(*proto.ServiceArgs) *kv.EvalResult
 	EvalCMD(*proto.ServiceArgs, bool) (*kv.EvalResult, *[]byte)
-	EvalGETUnserializable(*proto.ServiceArgs) *kv.EvalResult
-	RegisterDataChangeHandler(func(string, string))
+	SetCDC(kv.DataChangeHandler)
 }
 
 type CordServer struct {
@@ -48,12 +48,14 @@ func NewCordServer(cfg *config.CordConfig) *CordServer {
 		bootConfig:       cfg,
 		applyChan:        applyCh,
 		rf:               raft.Make(cfg.MakeGRPCClients(), cfg.Me, raft.MakePersister(), applyCh),
-		watchEnabled:     false,
+		watchEnabled:     cfg.WatchEnabled,
 		logger:           logging.GetLogger("server", logrus.DebugLevel).WithField("id", cfg.Me),
 		maxRaftState:     int64(cfg.SnapshotThres),
 		notify:           make(map[int64]chan *kv.EvalResult),
 		localRequestInfo: &proto.RequestInfo{ClientID: clientID, RequestID: RequestID},
+		cdc:              cdc.NewDCC(),
 	}
+	cs.kvStore.SetCDC(cs.cdc)
 	go func() {
 		server := grpc.NewServer()
 		proto.RegisterGenericServiceServer(server, cs.rf)
@@ -83,5 +85,25 @@ func (cs *CordServer) HandleRequest(ctx context.Context, in *proto.ServiceArgs) 
 	reply := &proto.ServiceReply{}
 	evalResult := cs.propose(*in)
 	reply.Result = evalResult.Data
+	// aggregate watch results if necessary
+	if len(evalResult.Watches) > 0 {
+		fmt.Printf("result:--%+v", *evalResult.Watches[0])
+	}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, watch := range evalResult.Watches {
+		wg.Add(1)
+		go func(c *cdc.WatchResult) {
+			data := <-c.Notify
+			fmt.Println("got output", data)
+			mu.Lock()
+			reply.Result[c.Key] = data
+			mu.Unlock()
+			c.Callback()
+			wg.Done()
+		}(watch)
+	}
+	wg.Wait()
+
 	return reply, evalResult.Err
 }

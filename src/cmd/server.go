@@ -55,10 +55,9 @@ func repl(cs *cord.CordServer) {
 			continue
 		}
 		cmd.OpKey = params[1]
-		if params[0] != "get" {
+		if cmd.OpType != proto.CmdArgs_WATCH && cmd.OpType != proto.CmdArgs_GET {
 			cmd.OpVal = params[2]
 		}
-		fmt.Println(cmd)
 		args := &proto.ServiceArgs{
 			Cmds: []*proto.CmdArgs{&cmd},
 		}
@@ -99,10 +98,12 @@ func main() {
 	proto.RegisterExternalServiceServer(server, cordServer)
 	fmt.Printf("server: starting with config:\n %+v\n", config)
 	fmt.Printf("server: outbound: listening on %s\n", listener.Addr())
-	go func() {
-		repl(cordServer)
-		//repl(nil)
-	}()
+	if config.StartWithCLI {
+		go func() {
+			repl(cordServer)
+			//repl(nil)
+		}()
+	}
 	go func() {
 		c := make(chan os.Signal, 2)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)

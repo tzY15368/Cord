@@ -2,15 +2,16 @@ package cord
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"6.824/cord/kv"
 	"6.824/proto"
 )
 
-var ErrRetry = errors.New("Err retry request")
-var ErrNotLeader = errors.New("Err no leader")
-var ErrApplyTimeout = errors.New("Err apply timeout")
+var ErrRetry = errors.New("err retry request")
+var ErrNotLeader = errors.New("err no leader")
+var ErrApplyTimeout = errors.New("err apply timeout")
 
 func (cs *CordServer) waitForApply(index int64) *kv.EvalResult {
 	cs.mu.Lock()
@@ -29,7 +30,10 @@ func (cs *CordServer) waitForApply(index int64) *kv.EvalResult {
 }
 
 func (cs *CordServer) propose(args proto.ServiceArgs) *kv.EvalResult {
-
+	if !args.Linearizable {
+		fmt.Println("warning: unlinearizable read")
+		return cs.kvStore.EvalCMDUnlinearizable(&args)
+	}
 	index, _, isLeader := cs.rf.Start(args)
 	if !isLeader {
 		return &kv.EvalResult{Err: ErrNotLeader}

@@ -30,15 +30,15 @@ func (cs *CordServer) handleApply() {
 				panic("conversion error:" + reflect.TypeOf(msg.Command).String())
 			}
 			fmt.Println("inbound command: ", msg.CommandIndex)
-			var res = &kv.EvalResult{}
-			if !args.Linearizable {
-				res = cs.kvStore.EvalGETUnserializable(&args)
-			} else {
-				ss := cs.tryStartSnapshot()
-				var dump *[]byte
-				res, dump = cs.kvStore.EvalCMD(&args, ss)
-				if ss {
-					cs.rf.Snapshot(msg.CommandIndex, *dump)
+			var res *kv.EvalResult
+			var dump *[]byte
+			ss := cs.tryStartSnapshot()
+			res, dump = cs.kvStore.EvalCMD(&args, ss)
+			if ss {
+				cs.rf.Snapshot(msg.CommandIndex, *dump)
+				swapped := atomic.CompareAndSwapInt32(&cs.inSnapshot, 1, 0)
+				if !swapped {
+					panic("no swap")
 				}
 			}
 			cs.mu.Lock()
