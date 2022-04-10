@@ -30,7 +30,7 @@ func RunREPL(repler IRepl) {
 			os.Exit(0)
 		}
 		params := strings.Split(s, " ")
-		if len(params) < 2 || len(params) > 3 {
+		if len(params) < 2 || len(params) > 4 {
 			fmt.Printf("invalid params\n")
 			continue
 		}
@@ -44,6 +44,8 @@ func RunREPL(repler IRepl) {
 			cmd.OpType = proto.CmdArgs_PUT
 		case "watch":
 			cmd.OpType = proto.CmdArgs_WATCH
+		case "del":
+			cmd.OpType = proto.CmdArgs_DELETE
 		default:
 			fmt.Printf("invalid command\n")
 			continue
@@ -56,12 +58,23 @@ func RunREPL(repler IRepl) {
 			Cmds: []*proto.CmdArgs{&cmd},
 		}
 		linearizable := true
-		if params[0] == "get" && len(params) == 3 {
+		if params[0] == "get" && len(params) >= 3 {
 			if params[2] == "false" || params[2] == "0" {
 				linearizable = false
 			}
 		}
 		args.Linearizable = linearizable
+		//ttl: time(ms)
+		if len(params) >= 4 {
+			var ttl int64
+			n, err := fmt.Sscanf(params[3], "%d", &ttl)
+			if err != nil || n != 1 {
+				fmt.Println("warning: parse ttl failed, ignoring ttl")
+			} else {
+				cmd.Ttl = time.Now().UnixNano()/1e6 + ttl
+			}
+		}
+
 		if repler != nil {
 
 			info := repler.CreateRequestInfo()

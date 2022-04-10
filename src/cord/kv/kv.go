@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"6.824/cord/cdc"
 	"6.824/logging"
@@ -38,7 +39,7 @@ var ErrNotImpl = errors.New("err not impl")
 
 func NewTempKVStore() *TempKVStore {
 	tks := &TempKVStore{
-		dataStore: proto.TempKVStore{Data: make(map[string]string)},
+		dataStore: proto.TempKVStore{Data: make(map[string]*proto.KVEntry)},
 		ack:       proto.AckMap{Ack: make(map[int64]int64)},
 		logger:    logging.GetLogger("kvs", logrus.InfoLevel),
 	}
@@ -59,7 +60,7 @@ func (kvs *TempKVStore) EvalCMDUnlinearizable(args *proto.ServiceArgs) *EvalResu
 			reply.Err = ErrGetOnly
 			break
 		}
-		reply.Data[cmd.OpKey] = kvs.dataStore.Data[cmd.OpKey]
+		reply.Data[cmd.OpKey] = kvs.dataStore.Data[cmd.OpKey].Data
 	}
 	defer kvs.mu.RUnlock()
 	return reply
@@ -108,15 +109,35 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (r
 	for _, cmd := range args.Cmds {
 		switch cmd.OpType {
 		case proto.CmdArgs_GET:
-			reply.Data[cmd.OpKey] = kvs.dataStore.Data[cmd.OpKey]
+			entry := kvs.dataStore.Data[cmd.OpKey]
+			reply.Data[cmd.OpKey] = ""
+			if entry != nil {
+				if entry.Ttl > time.Now().UnixNano()/1e6 {
+					reply.Data[cmd.OpKey] = entry.Data
+				} else {
+					delete(kvs.dataStore.Data, cmd.OpKey)
+				}
+			}
 		case proto.CmdArgs_APPEND:
-			kvs.dataStore.Data[cmd.OpKey] += cmd.OpVal
-			if kvs.dataChangeHandlers != nil {
-				kvs.dataChangeHandlers.CaptureDataChange(cmd.OpKey, kvs.dataStore.Data[cmd.OpKey])
+			old := kvs.dataStore.Data[cmd.OpKey]
+			didChange := cmd.OpVal != ""
+			if old != nil {
+				kvs.dataStore.Data[cmd.OpKey].Data += cmd.OpVal
+				kvs.dataStore.Data[cmd.OpKey].Ttl = cmd.Ttl
+			} else {
+				kvs.dataStore.Data[cmd.OpKey] = &proto.KVEntry{Data: cmd.OpVal, Ttl: cmd.Ttl}
+			}
+			if kvs.dataChangeHandlers != nil && didChange {
+				kvs.dataChangeHandlers.CaptureDataChange(cmd.OpKey, kvs.dataStore.Data[cmd.OpKey].Data)
 			}
 		case proto.CmdArgs_PUT:
-			kvs.dataStore.Data[cmd.OpKey] = cmd.OpVal
-			if kvs.dataChangeHandlers != nil {
+			didChange := false
+			entry := kvs.dataStore.Data[cmd.OpKey]
+			if entry != nil && entry.Data != cmd.OpVal {
+				didChange = true
+			}
+			kvs.dataStore.Data[cmd.OpKey] = &proto.KVEntry{Data: cmd.OpVal, Ttl: cmd.Ttl}
+			if kvs.dataChangeHandlers != nil && didChange {
 				kvs.dataChangeHandlers.CaptureDataChange(cmd.OpKey, cmd.OpVal)
 			}
 		case proto.CmdArgs_WATCH:
@@ -126,6 +147,13 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (r
 			}
 			watchResult := kvs.dataChangeHandlers.Watch(cmd.OpKey)
 			reply.Watches = append(reply.Watches, watchResult)
+		case proto.CmdArgs_DELETE:
+			// 删除不存在的key不应该唤醒watch
+			entry := kvs.dataStore.Data[cmd.OpKey]
+			if entry != nil && kvs.dataChangeHandlers != nil {
+				kvs.dataChangeHandlers.CaptureDataChange(cmd.OpKey, "")
+			}
+
 		default:
 			reply.Err = ErrNotImpl
 			return

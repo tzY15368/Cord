@@ -36,11 +36,12 @@ message CmdArgs {
         PUT = 1;
         APPEND = 2;
         WATCH = 3;
-        LEASE = 4;
+        DELETE = 4;
     }
     OPType opType = 1;
     string opKey = 2;
     string opVal = 3;
+    int64 ttl = 4;
 }
 
 message ServiceArgs {
@@ -57,8 +58,13 @@ message ServiceReply {
     map<string, string> result = 2;
 }
 
+message KVEntry {
+    string data = 1;
+    int64 ttl = 2;
+}
+
 message TempKVStore {
-    map<string, string> data = 1;
+    map<string, KVEntry> data = 1;
 }
 
 message AckMap {
