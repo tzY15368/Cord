@@ -1,6 +1,7 @@
 package diskpersister
 
 import (
+	"math/rand"
 	"os"
 
 	"github.com/edsrzf/mmap-go"
@@ -12,11 +13,25 @@ type DiskPersister struct {
 	usem bool
 }
 
+// will generate len(rangeEnd) slice anyways
+func genRandomBytes(rangeStart int, rangeEnd int) *[]byte {
+	diff := rangeEnd - rangeStart
+	r := rand.Intn(diff)
+	tokens := make([]byte, rangeEnd)
+	_, err := rand.Read(tokens)
+	tokenSlice := tokens[:rangeStart+r]
+	if err != nil {
+		panic(err)
+	}
+	return &tokenSlice
+}
+
 func NewPersister(fname string, usem bool) *DiskPersister {
 	file, err := os.OpenFile(fname, os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
 		panic(err)
 	}
+	file.Truncate(100)
 	d := &DiskPersister{
 		file: file,
 		usem: usem,

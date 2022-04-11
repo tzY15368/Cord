@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"math/rand"
 	"testing"
 )
 
@@ -31,19 +30,8 @@ func TestPersister(t *testing.T) {
 	}
 }
 
-func genRandomBytes() *[]byte {
-	diff := 660 - 540
-	r := rand.Intn(diff)
-	tokens := make([]byte, 540+r)
-	_, err := rand.Read(tokens)
-	if err != nil {
-		panic(err)
-	}
-	return &tokens
-}
-
 func TestRand(t *testing.T) {
-	fmt.Println(genRandomBytes())
+	fmt.Println(genRandomBytes(550, 660))
 	buf := new(bytes.Buffer)
 	var en uint64 = 999999999999999
 	encoder := gob.NewEncoder(buf)
@@ -57,7 +45,7 @@ func BenchmarkNaive(b *testing.B) {
 	persister := NewPersister("bench-out", false)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := persister.writeNaive(genRandomBytes())
+		err := persister.writeNaive(genRandomBytes(2500, 4500))
 		if err != nil {
 			panic(err)
 		}
@@ -68,7 +56,7 @@ func BenchmarkMMAP(b *testing.B) {
 	persister := NewPersister("bench-out-mmap", true)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := persister.writeMMap(genRandomBytes())
+		err := persister.writeMMap(genRandomBytes(540, 660))
 		if err != nil {
 			panic(err)
 		}

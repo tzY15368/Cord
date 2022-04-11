@@ -1,45 +1,48 @@
 package diskpersister
 
 import (
-	"fmt"
 	"testing"
 )
 
+func BenchmarkMMAPP(b *testing.B) {
+	mp := NewMMapPersister("mmap-bench-out-rf", "mmap-bench-out-ss", 5000)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < 1; j++ {
+			mp.SaveStateAndSnapshot(*genRandomBytes(2500, 4500), *genRandomBytes(500, 5000))
+		}
+	}
+}
+
 func TestMMapPersister(t *testing.T) {
-	mp := NewMMapPersister("mmap-out")
-	var err error
+	// 5kb的log
+	mp := NewMMapPersister("mmap-rf-out", "mmap-ss-out", 5000)
 	s := "I'm writing a bulk ID3 tag editor in C."
 	data1 := []byte(s)
-	err = mp.write(&data1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var data2 *[]byte
-	data2, err = mp.read()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(*data2) != string(data1) {
-		fmt.Println(data1)
-		fmt.Println(*data2)
-		t.Fatal("no match?")
-	}
 
+	mp.SaveStateAndSnapshot(data1, data1)
+
+	state := mp.ReadRaftState()
+	snaps := mp.SnapshotSize()
+	if string(state) != string(data1) {
+		panic("bad state")
+	}
+	if snaps != len(data1) {
+		panic("Bad snap")
+	}
 	s += "ID3 tags are usually at the beginning of an mp3 encoded file/"
-	data3 := []byte(s)
-	err = mp.write(&data3)
-	if err != nil {
-		t.Fatal(err)
+	data2 := []byte(s)
+
+	mp.SaveStateAndSnapshot(data2, data2)
+
+	state = mp.ReadRaftState()
+	snaps = mp.SnapshotSize()
+	if string(state) != string(data2) {
+		panic("bad state")
+	}
+	if snaps != len(data2) {
+		panic("Bad snap")
 	}
 
-	var data4 *[]byte
-	data4, err = mp.read()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data3) != string(*data4) {
-		fmt.Println(data3)
-		fmt.Println(*data4)
-		t.Fatal("no match 2")
-	}
 }
