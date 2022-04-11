@@ -6,6 +6,7 @@ require (
 	github.com/aquasecurity/libbpfgo v0.2.1-libbpf-0.4.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.1 // indirect
 	github.com/cweill/gotests v1.6.0 // indirect
+	github.com/edsrzf/mmap-go v1.1.0 // indirect
 	github.com/go-delve/delve v1.7.1 // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/google/pprof v0.0.0-20220314021825-5bba342933ea // indirect
