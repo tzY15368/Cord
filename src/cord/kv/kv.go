@@ -23,7 +23,7 @@ type TempKVStore struct {
 
 type DataChangeHandler interface {
 	CaptureDataChange(string, string)
-	Watch(string) *cdc.WatchResult
+	Watch(string) (*cdc.WatchResult, error)
 }
 
 type EvalResult struct {
@@ -109,6 +109,14 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (r
 	for _, cmd := range args.Cmds {
 		switch cmd.OpType {
 		case proto.CmdArgs_GET:
+			if len(cmd.OpKey) > 1 && cmd.OpKey[len(cmd.OpKey)-1] == '*' {
+				for key, entry := range kvs.dataStore.Data {
+					if len(key) >= len(cmd.OpKey)-1 && key[:len(cmd.OpKey)-1] == cmd.OpKey[:len(cmd.OpKey)-1] {
+						reply.Data[cmd.OpKey] = entry.Data
+					}
+				}
+				return
+			}
 			entry := kvs.dataStore.Data[cmd.OpKey]
 			reply.Data[cmd.OpKey] = ""
 			if entry != nil {
@@ -145,8 +153,12 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (r
 				reply.Err = ErrNoWatch
 				return
 			}
-			watchResult := kvs.dataChangeHandlers.Watch(cmd.OpKey)
-			reply.Watches = append(reply.Watches, watchResult)
+			watchResult, err := kvs.dataChangeHandlers.Watch(cmd.OpKey)
+			if err != nil {
+				reply.Err = err
+			} else {
+				reply.Watches = append(reply.Watches, watchResult)
+			}
 		case proto.CmdArgs_DELETE:
 			// 删除不存在的key不应该唤醒watch
 			entry := kvs.dataStore.Data[cmd.OpKey]

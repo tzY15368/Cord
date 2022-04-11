@@ -1,11 +1,14 @@
 package cdc
 
 import (
+	"errors"
 	"sync"
 
 	"6.824/logging"
 	"github.com/sirupsen/logrus"
 )
+
+var ErrNoRangeWatch = errors.New("err no watch")
 
 type DataChangeCapturer struct {
 	mu     sync.RWMutex
@@ -58,7 +61,10 @@ func (dc *DataChangeCapturer) CaptureDataChange(key string, newVal string) {
 }
 
 // returns new value, watch must return immediately
-func (dc *DataChangeCapturer) Watch(key string) *WatchResult {
+func (dc *DataChangeCapturer) Watch(key string) (*WatchResult, error) {
+	if len(key) >= 1 && key[len(key)-1] == '*' {
+		return nil, ErrNoRangeWatch
+	}
 	changedChan := make(chan string, 1)
 	dc.mu.Lock()
 	listener, ok := dc.notify[key]
@@ -77,5 +83,5 @@ func (dc *DataChangeCapturer) Watch(key string) *WatchResult {
 		delete(listener.listeners, changedChan)
 		listener.mu.Unlock()
 	}
-	return &WatchResult{Key: key, Callback: callback, Notify: changedChan}
+	return &WatchResult{Key: key, Callback: callback, Notify: changedChan}, nil
 }
