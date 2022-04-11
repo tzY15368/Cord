@@ -19,9 +19,9 @@ import (
 type Raft struct {
 	//mu        sync.Mutex          // Lock to protect shared access to this peer's state
 	mu        *mutex
-	peers     []Callable // RPC end points of all peers
-	persister *Persister // Object to hold this peer's persisted state
-	me        int        // this peer's index into peers[]
+	peers     []Callable   // RPC end points of all peers
+	persister IPersistable // Object to hold this peer's persisted state
+	me        int          // this peer's index into peers[]
 
 	// Your data here (2A, 2B, 2C).
 	// Look at the paper's Figure 2 for a description of what
@@ -196,7 +196,7 @@ type Callable interface {
 }
 
 func Make(ipeers interface{}, me int,
-	persister *Persister, applyCh chan ApplyMsg) *Raft {
+	persister IPersistable, applyCh chan ApplyMsg) *Raft {
 	rf := &Raft{}
 	peers, ok := ipeers.([]*labrpc.ClientEnd)
 	if ok {

@@ -8,6 +8,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type IPersistable interface {
+	ReadRaftState() []byte
+
+	RaftStateSize() int
+
+	SaveStateAndSnapshot([]byte, []byte)
+
+	ReadSnapshot() []byte
+
+	SnapshotSize() int
+}
+
 // persist not thread safe
 // save Raft's persistent state to stable storage,
 // where it can later be retrieved after a crash and restart.
