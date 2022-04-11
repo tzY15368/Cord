@@ -40,6 +40,8 @@ func (rf *Raft) persist() {
 // restore previously persisted state.
 //
 func (rf *Raft) readPersist() {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 	raftState := rf.persister.ReadRaftState()
 	raftSnapshot := rf.persister.ReadSnapshot()
 	r := bytes.NewBuffer(raftState)
@@ -69,7 +71,6 @@ func (rf *Raft) readPersist() {
 		rf.logger.WithError(err).Warn("persist: read persist failed")
 		return
 	}
-	rf.mu.Lock()
 	rf.currentTerm = term
 	rf.votedFor = votedFor
 	rf.log = logs
@@ -89,7 +90,6 @@ func (rf *Raft) readPersist() {
 		}
 		rf.applyMsgQueue.put(msg)
 	}
-	rf.mu.Unlock()
 	rf.logger.WithField("at", time.Now()).WithFields(logrus.Fields{
 		"currentTerm":       term,
 		"votedFor":          votedFor,
