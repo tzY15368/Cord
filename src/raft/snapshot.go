@@ -32,7 +32,7 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	defer rf.persist()
 	rf.logger.WithFields(logrus.Fields{
 		"index": index,
-	}).Info("snapshot: got snapshot")
+	}).Info("snapshot: got snapshot request")
 	// commitIndex始终小于等于maxIndex，所以不用担心
 	baseIndex := rf.getBaseLogIndex()
 	fields := logrus.Fields{
