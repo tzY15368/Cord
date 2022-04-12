@@ -8,3 +8,13 @@ BenchmarkMMAP
 BenchmarkMMAP-16         2997644               382.2 ns/op           654 B/op          2 allocs/op
 PASS
 ok      6.824/diskpersister     3.128s
+
+
+goos: windows
+goarch: amd64
+pkg: 6.824/diskpersister
+cpu: 12th Gen Intel(R) Core(TM) i5-12600K
+BenchmarkPNaive-16         37902             32828 ns/op            4888 B/op          2 allocs/op
+BenchmarkPMMAP-16         413799              2420 ns/op            4888 B/op          2 allocs/op
+PASS
+ok      6.824/diskpersister     2.802s

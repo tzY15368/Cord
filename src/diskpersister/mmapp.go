@@ -67,14 +67,21 @@ func NewMMapPersister(raftFname string, snapshotFname string, maxSize int64) *MM
 	if err != nil {
 		panic(err)
 	}
-	if stat.Size() >= DEFAULT_SNAPSHOT_SIZE {
-		fmt.Println("warning: size > maxsize, will NOT truncate")
-	} else {
+	if stat.Size() == 0 {
+		fmt.Println("creating new file with size", DEFAULT_SNAPSHOT_SIZE)
 		err = filess.Truncate(DEFAULT_SNAPSHOT_SIZE)
 		if err != nil {
 			panic(err)
 		}
 	}
+	// if stat.Size() >= DEFAULT_SNAPSHOT_SIZE {
+	// 	fmt.Println("warning: size > maxsize, will NOT truncate")
+	// } else {
+	// 	err = filess.Truncate(DEFAULT_SNAPSHOT_SIZE)
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
+	// }
 
 	memss, err := mmap.Map(filess, mmap.RDWR, 0)
 	if err != nil {
@@ -97,49 +104,103 @@ func (mp *MMapPersister) Close() {
 	mp.raftFile.Close()
 }
 
+func (mp *MMapPersister) resizeRfMem(s int64) (*mmap.MMap, error) {
+	panic("rf should never resize")
+	var err error
+	var newMem mmap.MMap
+	err = mp.raftMem.Unmap()
+	if err != nil {
+		return nil, err
+	}
+	err = mp.raftFile.Truncate(s)
+	if err != nil {
+		return nil, err
+	}
+	newMem, err = mmap.Map(mp.raftFile, mmap.RDWR, 0)
+	if err != nil {
+		return nil, err
+	}
+	mp.raftMem = newMem
+	return &mp.raftMem, nil
+}
+func (mp *MMapPersister) resizeSsMem(s int64) (*mmap.MMap, error) {
+	var err error
+	var newMem mmap.MMap
+	err = mp.snapshotMem.Unmap()
+	if err != nil {
+		return nil, err
+	}
+	err = mp.snapshotFile.Truncate(s)
+	if err != nil {
+		return nil, err
+	}
+	_, err = mp.snapshotFile.Seek(0, 0)
+	if err != nil {
+		return nil, err
+	}
+	newMem, err = mmap.Map(mp.snapshotFile, mmap.RDWR, 0)
+	if err != nil {
+		return nil, err
+	}
+	mp.snapshotMem = newMem
+	return &mp.snapshotMem, nil
+
+}
+
 func (mp *MMapPersister) SaveStateAndSnapshot(state []byte, snapshot []byte) {
 	mp.rwmu.Lock()
 	defer mp.rwmu.Unlock()
 	var err error
-	err = Write(mp.raftFile, &mp.raftMem, &state, false)
+	err = Write(&mp.raftMem, mp.resizeRfMem, &state, false)
 	if err != nil {
 		panic(err)
 	}
-
-	err = Write(mp.snapshotFile, &mp.snapshotMem, &snapshot, true)
+	fmt.Println("Rf---------------------------")
+	err = Write(&mp.snapshotMem, mp.resizeSsMem, &snapshot, true)
 	if err != nil {
 		panic(err)
 	}
+	//fmt.Println("ss")
 }
 
 // primitive write, not thread safe
 // 超过一半时候扩容*2， 小于1/4则缩容/2
 // 假设；snapshot每次变更幅度不大
-func Write(fd *os.File, mem **mmap.MMap, data *[]byte, allowResize bool) error {
+func Write(_mem *mmap.MMap, resizeMem func(int64) (*mmap.MMap, error), data *[]byte, allowResize bool) error {
 	actualLen := len(*data) + 8
-	if !allowResize && actualLen > len(*mem) {
+	if !allowResize && actualLen > len(*_mem) {
 		panic("too long, cant write")
 	}
-	if len(*mem)/2 < actualLen {
-		// enlarge
-		// 老数据找不到了不要紧，write会重写新的长度在最后
-		err := fd.Truncate(int64(2 * len(*data)))
-		if err != nil {
-			return err
+	var mem *mmap.MMap = _mem
+	var err error
+	fmt.Println("before:", len(*mem))
+	if allowResize {
+		if len(*mem)/2 < actualLen {
+			// enlarge
+			// 老数据找不到了不要紧，write会重写新的长度在最后
+			fmt.Println("enlarging")
+			mem, err = resizeMem(int64(2 * len(*data)))
+			if err != nil {
+				return err
+			}
+		} else if len(*mem) > actualLen*4 {
+			// shrink
+			fmt.Println("shrinking")
+			mem, err = resizeMem(int64(actualLen * 2))
+			if err != nil {
+				return err
+			}
 		}
-	} else if len(*mem) > actualLen*4 {
-		// shrink
-		err := fd.Truncate(int64(actualLen) * 2)
-		if err != nil {
-			return err
-		}
-
 	}
+	fmt.Println("after:", len(*mem))
 	n := copy(*mem, *data)
 	if n != len(*data) {
 		panic("wrong len")
 	}
 
+	if allowResize {
+		fmt.Println("wrote bytes", n)
+	}
 	casted := make([]byte, 8)
 	binary.LittleEndian.PutUint64(casted, uint64(len(*data)))
 

@@ -41,7 +41,7 @@ func TestRand(t *testing.T) {
 
 // 假设：log compaction按50kb为单位进行（即当log大小超过50kb时候打snapshot，snapshot大小暂定500kb）
 // 按每次persist写共计约600kb计算，随即上下浮动10%，因此需要随机生成540-660kb的[]byte
-func BenchmarkNaive(b *testing.B) {
+func BenchmarkPNaive(b *testing.B) {
 	persister := NewPersister("bench-out", false)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -52,11 +52,11 @@ func BenchmarkNaive(b *testing.B) {
 	}
 }
 
-func BenchmarkMMAP(b *testing.B) {
+func BenchmarkPMMAP(b *testing.B) {
 	persister := NewPersister("bench-out-mmap", true)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := persister.writeMMap(genRandomBytes(540, 660))
+		err := persister.writeMMap(genRandomBytes(2500, 4500))
 		if err != nil {
 			panic(err)
 		}
