@@ -11,6 +11,7 @@ import (
 	"6.824/config"
 	"6.824/cord/cdc"
 	"6.824/cord/kv"
+	"6.824/diskpersister"
 	"6.824/logging"
 	"6.824/proto"
 	"6.824/raft"
@@ -20,8 +21,9 @@ import (
 
 type IKVStore interface {
 	EvalCMDUnlinearizable(*proto.ServiceArgs) *kv.EvalResult
-	EvalCMD(*proto.ServiceArgs, bool) (*kv.EvalResult, *[]byte)
+	EvalCMD(*proto.ServiceArgs, bool) (*kv.EvalResult, []byte)
 	SetCDC(kv.DataChangeHandler)
+	LoadSnapshot([]byte)
 }
 
 type CordServer struct {
@@ -37,23 +39,31 @@ type CordServer struct {
 	watchEnabled     bool
 	cdc              *cdc.DataChangeCapturer
 	inSnapshot       int32
+	Persister        raft.IPersistable
 }
 
 func NewCordServer(cfg *config.CordConfig) *CordServer {
 	applyCh := make(chan raft.ApplyMsg)
 	var clientID int64 = common.Nrand()
 	var RequestID int64 = 0
+	persister := diskpersister.NewMMapPersister(
+		fmt.Sprintf("raft-state-out-%d", cfg.Me),
+		fmt.Sprintf("snapshot-out-%d", cfg.Me),
+		5000,
+	)
 	cs := &CordServer{
-		kvStore:          kv.NewTempKVStore(),
-		bootConfig:       cfg,
-		applyChan:        applyCh,
-		rf:               raft.Make(cfg.MakeGRPCClients(), cfg.Me, raft.MakePersister(), applyCh),
+		kvStore:    kv.NewTempKVStore(),
+		bootConfig: cfg,
+		applyChan:  applyCh,
+		//rf:               raft.Make(cfg.MakeGRPCClients(), cfg.Me, raft.MakePersister(), applyCh),
+		rf:               raft.Make(cfg.MakeGRPCClients(), cfg.Me, persister, applyCh),
 		watchEnabled:     cfg.WatchEnabled,
 		logger:           logging.GetLogger("server", logrus.DebugLevel).WithField("id", cfg.Me),
 		maxRaftState:     int64(cfg.SnapshotThres),
 		notify:           make(map[int64]chan *kv.EvalResult),
 		localRequestInfo: &proto.RequestInfo{ClientID: clientID, RequestID: RequestID},
 		cdc:              cdc.NewDCC(),
+		Persister:        persister,
 	}
 	cs.kvStore.SetCDC(cs.cdc)
 	go func() {

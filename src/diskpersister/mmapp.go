@@ -155,12 +155,10 @@ func (mp *MMapPersister) SaveStateAndSnapshot(state []byte, snapshot []byte) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Rf---------------------------")
 	err = Write(&mp.snapshotMem, mp.resizeSsMem, &snapshot, true)
 	if err != nil {
 		panic(err)
 	}
-	//fmt.Println("ss")
 }
 
 // primitive write, not thread safe
@@ -173,33 +171,33 @@ func Write(_mem *mmap.MMap, resizeMem func(int64) (*mmap.MMap, error), data *[]b
 	}
 	var mem *mmap.MMap = _mem
 	var err error
-	fmt.Println("before:", len(*mem))
+	//fmt.Println("before:", len(*mem))
 	if allowResize {
 		if len(*mem)/2 < actualLen {
 			// enlarge
 			// 老数据找不到了不要紧，write会重写新的长度在最后
-			fmt.Println("enlarging")
+			//fmt.Println("enlarging")
 			mem, err = resizeMem(int64(2 * len(*data)))
 			if err != nil {
 				return err
 			}
 		} else if len(*mem) > actualLen*4 {
 			// shrink
-			fmt.Println("shrinking")
+			//.Println("shrinking")
 			mem, err = resizeMem(int64(actualLen * 2))
 			if err != nil {
 				return err
 			}
 		}
 	}
-	fmt.Println("after:", len(*mem))
+	//fmt.Println("after:", len(*mem))
 	n := copy(*mem, *data)
 	if n != len(*data) {
 		panic("wrong len")
 	}
 
 	if allowResize {
-		fmt.Println("wrote bytes", n)
+		//fmt.Println("wrote bytes", n)
 	}
 	casted := make([]byte, 8)
 	binary.LittleEndian.PutUint64(casted, uint64(len(*data)))

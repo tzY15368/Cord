@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"6.824/cord"
 	"6.824/proto"
 )
 
@@ -29,6 +30,28 @@ func RunREPL(repler IRepl) {
 			fmt.Printf("bye\n")
 			os.Exit(0)
 		}
+
+		if len(s) > 1 && s[0] == '%' {
+
+			var cordsv *cord.CordServer
+			var ok bool
+			if cordsv, ok = repler.(*cord.CordServer); !ok {
+				fmt.Println("error: not sv cli, ignoring metrics cmd")
+				continue
+			}
+
+			if s[1:] == "rfstatesize" {
+				fmt.Println(cordsv.Persister.RaftStateSize())
+				continue
+			}
+			if s[1:] == "snapshotsize" {
+				fmt.Println(cordsv.Persister.SnapshotSize())
+				continue
+			}
+			fmt.Println("error: unknown metrics")
+			continue
+		}
+
 		params := strings.Split(s, " ")
 		if len(params) < 2 || len(params) > 4 {
 			fmt.Printf("invalid params\n")
@@ -52,6 +75,10 @@ func RunREPL(repler IRepl) {
 		}
 		cmd.OpKey = params[1]
 		if cmd.OpType != proto.CmdArgs_WATCH && cmd.OpType != proto.CmdArgs_GET {
+			if len(params) < 3 {
+				fmt.Println("invalid command")
+				continue
+			}
 			cmd.OpVal = params[2]
 		}
 		args := &proto.ServiceArgs{

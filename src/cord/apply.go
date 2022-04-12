@@ -7,13 +7,18 @@ import (
 
 	"6.824/cord/kv"
 	"6.824/proto"
+	"github.com/sirupsen/logrus"
 )
 
 func (cs *CordServer) tryStartSnapshot() bool {
 	if cs.maxRaftState == -1 {
 		return false
 	}
-	if cs.maxRaftState*9/10 > int64(cs.rf.GetStateSize()) {
+	cs.logger.WithFields(logrus.Fields{
+		"maxstate": cs.maxRaftState * 9 / 10,
+		"current":  cs.rf.GetStateSize(),
+	}).Debug("considering snapshot")
+	if cs.maxRaftState*9/10 < int64(cs.rf.GetStateSize()) {
 		swapped := atomic.CompareAndSwapInt32(&cs.inSnapshot, 0, 1)
 		if swapped {
 			return true
@@ -31,11 +36,11 @@ func (cs *CordServer) handleApply() {
 			}
 			fmt.Println("inbound command: ", msg.CommandIndex)
 			var res *kv.EvalResult
-			var dump *[]byte
+			var dump []byte
 			ss := cs.tryStartSnapshot()
 			res, dump = cs.kvStore.EvalCMD(&args, ss)
 			if ss {
-				cs.rf.Snapshot(msg.CommandIndex, *dump)
+				cs.rf.Snapshot(msg.CommandIndex, dump)
 				swapped := atomic.CompareAndSwapInt32(&cs.inSnapshot, 1, 0)
 				if !swapped {
 					panic("no swap")
@@ -55,7 +60,8 @@ func (cs *CordServer) handleApply() {
 			cs.mu.Unlock()
 			ch <- res
 		} else {
-			panic("no snapshot yet")
+			fmt.Println("Loading snapshot... size=", len(msg.Snapshot))
+			cs.kvStore.LoadSnapshot(msg.Snapshot)
 		}
 	}
 }

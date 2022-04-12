@@ -80,7 +80,15 @@ func (kvs *TempKVStore) isDuplicate(req *proto.RequestInfo) bool {
 	return ans
 }
 
-func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (reply *EvalResult, dump *[]byte) {
+func dataExpired(ttl int64) bool {
+	if ttl == 0 {
+		return false
+	}
+	now := time.Now().UnixNano() / 1e6
+	return ttl < now
+}
+
+func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (reply *EvalResult, dump []byte) {
 	reply = &EvalResult{
 		Data:    make(map[string]string),
 		Info:    args.Info,
@@ -112,7 +120,13 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (r
 			if len(cmd.OpKey) > 1 && cmd.OpKey[len(cmd.OpKey)-1] == '*' {
 				for key, entry := range kvs.dataStore.Data {
 					if len(key) >= len(cmd.OpKey)-1 && key[:len(cmd.OpKey)-1] == cmd.OpKey[:len(cmd.OpKey)-1] {
-						reply.Data[cmd.OpKey] = entry.Data
+						if dataExpired(entry.Ttl) {
+							fmt.Println("ttl reached")
+							delete(kvs.dataStore.Data, key)
+						} else {
+							reply.Data[cmd.OpKey] = entry.Data
+
+						}
 					}
 				}
 				return
@@ -120,10 +134,11 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (r
 			entry := kvs.dataStore.Data[cmd.OpKey]
 			reply.Data[cmd.OpKey] = ""
 			if entry != nil {
-				if entry.Ttl > time.Now().UnixNano()/1e6 {
-					reply.Data[cmd.OpKey] = entry.Data
-				} else {
+				if dataExpired(entry.Ttl) {
+					fmt.Println("ttl reached")
 					delete(kvs.dataStore.Data, cmd.OpKey)
+				} else {
+					reply.Data[cmd.OpKey] = entry.Data
 				}
 			}
 		case proto.CmdArgs_APPEND:
@@ -171,10 +186,16 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (r
 			return
 		}
 	}
-	var data []byte
 	if shouldSnapshot {
-		data, reply.Err = kvs.dataStore.Marshal()
-		dump = &data
+		dump, reply.Err = kvs.dataStore.Marshal()
+		fmt.Println("snapshot: got dump bytes", len(dump))
 	}
 	return
+}
+
+func (kvs *TempKVStore) LoadSnapshot(data []byte) {
+	err := kvs.dataStore.Unmarshal(data)
+	if err != nil {
+		panic(err)
+	}
 }
