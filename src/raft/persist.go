@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"6.824/labgob"
+	"6.824/proto"
 	"github.com/sirupsen/logrus"
 )
 
@@ -60,7 +61,7 @@ func (rf *Raft) readPersist() {
 	d := labgob.NewDecoder(r)
 
 	var term, votedFor int
-	var logs []LogEntry
+	var logs []*proto.LogEntry
 	var lastIncludedTerm, lastIncludedIndex int
 
 	if err := d.Decode(&term); err != nil {

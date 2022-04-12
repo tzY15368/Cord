@@ -7,6 +7,7 @@ import (
 
 	"6.824/common"
 	"6.824/labgob"
+	"6.824/proto"
 	"github.com/sirupsen/logrus"
 )
 
@@ -64,8 +65,8 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	lastIncludedEntry := rf.log[offset]
 
 	// handle snapshot
-	rf.lastIncludedIndex = lastIncludedEntry.Index
-	rf.lastIncludedTerm = lastIncludedEntry.Term
+	rf.lastIncludedIndex = int(lastIncludedEntry.Index)
+	rf.lastIncludedTerm = int(lastIncludedEntry.Term)
 	rf.snapshot = snapshot
 
 	// log compaction
@@ -110,7 +111,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	rf.currentTerm = args.Term
 	rf.lastIncludedIndex = args.LastIncludedIndex
 	rf.lastIncludedTerm = args.LastIncludedTerm
-	rf.log = make([]LogEntry, 0)
+	rf.log = make([]*proto.LogEntry, 0)
 	rf.dumpLogFields().Debug("snapshot: log truncated")
 	// todo: ignore leaderid for now
 	msg := ApplyMsg{

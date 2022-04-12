@@ -5,28 +5,29 @@ import (
 	"time"
 
 	"6.824/common"
+	"6.824/proto"
 	"github.com/sirupsen/logrus"
 )
 
-func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
+func (rf *Raft) AppendEntries(args *proto.AppendEntriesArgs, reply *proto.AppendEntriesReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	defer rf.persist()
 
 	reply.Success = false
 
-	if args.Term < rf.currentTerm {
+	if int(args.Term) < rf.currentTerm {
 		// reject requests with stale term number
-		reply.Term = rf.currentTerm
-		reply.NextTryIndex = rf.getLastLogIndex() + 1
+		reply.Term = int64(rf.currentTerm)
+		reply.NextTryIndex = int64(rf.getLastLogIndex() + 1)
 		return
 	}
 
 	// 比如： 一个实例断开了，自己进行两次失败选举，term=3，连回来之后另外两个先变回follower重新选
-	if args.Term > rf.currentTerm {
+	if int(args.Term) > rf.currentTerm {
 		// become follower and update current term
 		rf.state = STATE_FOLLOWER
-		rf.currentTerm = args.Term
+		rf.currentTerm = int(args.Term)
 		rf.votedFor = -1
 		rf.logger.WithField("newTerm", rf.currentTerm).Info("appendEntry: became follower due to higher client term")
 		rf.dumpLog()
@@ -35,34 +36,34 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	// confirm heartbeat to refresh timeout
 	rf.chanHeartbeat <- true
 
-	reply.Term = rf.currentTerm
+	reply.Term = int64(rf.currentTerm)
 
 	// optimization
-	if args.PrevLogIndex > rf.getLastLogIndex() {
-		reply.NextTryIndex = rf.getLastLogIndex() + 1
+	if int(args.PrevLogIndex) > rf.getLastLogIndex() {
+		reply.NextTryIndex = int64(rf.getLastLogIndex() + 1)
 		return
 	}
 
 	// 待优化
 	baseIndex := rf.getBaseLogIndex()
 	// baseIndex := rf.log[0].Index
-	rf.leaderID = args.LeaderId
-	if args.PrevLogIndex >= baseIndex && args.PrevLogTerm != rf.getLogTermAtOffset(args.PrevLogIndex-baseIndex) {
+	rf.leaderID = int(args.LeaderID)
+	if int(args.PrevLogIndex) >= baseIndex && int(args.PrevLogTerm) != rf.getLogTermAtOffset(int(args.PrevLogIndex)-baseIndex) {
 		// if entry log[prevLogIndex] conflicts with new one, there may be conflict entries before.
 		// we can bypass all entries during the problematic term to speed up.
-		rf.logger.WithField("args", fmt.Sprintf("%+v", args)).WithField("logterm", rf.getLogTermAtOffset(args.PrevLogIndex-baseIndex)).Info("cond failed")
-		term := rf.getLogTermAtOffset(args.PrevLogIndex - baseIndex)
-		for i := args.PrevLogIndex - 1; i >= baseIndex; i-- {
+		rf.logger.WithField("args", fmt.Sprintf("%+v", args)).WithField("logterm", rf.getLogTermAtOffset(int(args.PrevLogIndex)-baseIndex)).Info("cond failed")
+		term := rf.getLogTermAtOffset(int(args.PrevLogIndex) - baseIndex)
+		for i := int(args.PrevLogIndex) - 1; i >= baseIndex; i-- {
 			if rf.getLogTermAtOffset(i-baseIndex) != term {
-				reply.NextTryIndex = i + 1
+				reply.NextTryIndex = int64(i + 1)
 				break
 			}
 		}
-	} else if args.PrevLogIndex >= baseIndex-1 {
+	} else if int(args.PrevLogIndex) >= baseIndex-1 {
 		// otherwise log up to prevLogIndex are safe.
 		// we can merge lcoal log and entries from leader, and apply log if commitIndex changes.
 		if len(rf.log) > 0 {
-			rightMargin := args.PrevLogIndex - baseIndex + 1
+			rightMargin := int(args.PrevLogIndex) - baseIndex + 1
 			if rightMargin > len(rf.log) {
 				rf.logger.WithFields(logrus.Fields{
 					"rightMargin": rightMargin,
@@ -80,14 +81,14 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 		rf.log = append(rf.log, args.Entries...)
 		reply.Success = true
-		reply.NextTryIndex = args.PrevLogIndex + len(args.Entries)
+		reply.NextTryIndex = int64(int(args.PrevLogIndex) + len(args.Entries))
 		rf.persist()
 
-		if args.LeaderCommit > rf.commitIndex {
-			if rf.getLastLogIndex() < args.LeaderCommit {
+		if int(args.LeaderCommit) > rf.commitIndex {
+			if rf.getLastLogIndex() < int(args.LeaderCommit) {
 				rf.commitIndex = rf.getLastLogIndex()
 			} else {
-				rf.commitIndex = args.LeaderCommit
+				rf.commitIndex = int(args.LeaderCommit)
 			}
 			//go rf.commitLog()
 			rf.dumpLog()
@@ -96,18 +97,18 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	}
 }
 
-func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
+func (rf *Raft) sendAppendEntries(server int, args *proto.AppendEntriesArgs, reply *proto.AppendEntriesReply) bool {
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	defer rf.persist()
 	defer rf.panicHandler()
-	if !ok || rf.state != STATE_LEADER || args.Term != rf.currentTerm {
+	if !ok || rf.state != STATE_LEADER || int(args.Term) != rf.currentTerm {
 		return ok
 	}
-	if reply.Term > rf.currentTerm {
-		rf.currentTerm = reply.Term
+	if int(reply.Term) > rf.currentTerm {
+		rf.currentTerm = int(reply.Term)
 		rf.state = STATE_FOLLOWER
 		rf.votedFor = -1
 		//rf.persist()
@@ -117,21 +118,21 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	}
 	if reply.Success {
 		if len(args.Entries) > 0 {
-			rf.nextIndex[server] = args.Entries[len(args.Entries)-1].Index + 1
+			rf.nextIndex[server] = int(args.Entries[len(args.Entries)-1].Index + 1)
 			rf.matchIndex[server] = rf.nextIndex[server] - 1
 		}
 	} else {
-		rf.nextIndex[server] = common.Min(reply.NextTryIndex, rf.getLastLogIndex())
+		rf.nextIndex[server] = common.Min(int(reply.NextTryIndex), rf.getLastLogIndex())
 	}
 
 	baseIndex := rf.getBaseLogIndex()
 	// baseIndex := rf.log[0].Index
 
-	for N := rf.getLastLogIndex(); N > rf.commitIndex && rf.log[N-baseIndex].Term == rf.currentTerm; N-- {
+	for N := rf.getLastLogIndex(); N > rf.commitIndex && rf.log[N-baseIndex].Term == int64(rf.currentTerm); N-- {
 		// find if there exists an N to update commitIndex
 		count := 1
 
-		if rf.log[N-baseIndex].Term == rf.currentTerm {
+		if rf.log[N-baseIndex].Term == int64(rf.currentTerm) {
 			for i := range rf.peers {
 				if i != rf.me && rf.matchIndex[i] >= N {
 					count++
@@ -164,16 +165,16 @@ func (rf *Raft) broadcastAppendEntries() {
 
 	for server := range rf.peers {
 		if server != rf.me && rf.state == STATE_LEADER {
-			args := &AppendEntriesArgs{
-				Term:         rf.currentTerm,
-				LeaderId:     rf.me,
-				PrevLogIndex: rf.nextIndex[server] - 1,
+			args := &proto.AppendEntriesArgs{
+				Term:         int64(rf.currentTerm),
+				LeaderID:     int64(rf.me),
+				PrevLogIndex: int64(rf.nextIndex[server] - 1),
 			}
 
-			if args.PrevLogIndex >= baseIndex {
-				args.PrevLogTerm = rf.log[args.PrevLogIndex-baseIndex].Term
+			if int(args.PrevLogIndex) >= baseIndex {
+				args.PrevLogTerm = rf.log[int(args.PrevLogIndex)-baseIndex].Term
 			} else {
-				args.PrevLogTerm = rf.lastIncludedTerm
+				args.PrevLogTerm = int64(rf.lastIncludedTerm)
 			}
 			lastLogIndex := rf.getLastLogIndex()
 			if rf.nextIndex[server] <= lastLogIndex {
@@ -215,9 +216,9 @@ func (rf *Raft) broadcastAppendEntries() {
 					args.Entries = rf.log[rf.nextIndex[server]-baseIndex:]
 				}
 			}
-			args.LeaderCommit = rf.commitIndex
+			args.LeaderCommit = int64(rf.commitIndex)
 
-			go rf.sendAppendEntries(server, args, &AppendEntriesReply{})
+			go rf.sendAppendEntries(server, args, &proto.AppendEntriesReply{})
 		}
 	}
 }

@@ -124,9 +124,20 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (r
 							fmt.Println("ttl reached")
 							delete(kvs.dataStore.Data, key)
 						} else {
-							reply.Data[cmd.OpKey] = entry.Data
+							reply.Data[key] = entry.Data
 
 						}
+					}
+				}
+				return
+			} else if cmd.OpKey == "*" {
+				for key, entry := range kvs.dataStore.Data {
+					if dataExpired(entry.Ttl) {
+						fmt.Println("ttl reached")
+						delete(kvs.dataStore.Data, key)
+					} else {
+						reply.Data[key] = entry.Data
+
 					}
 				}
 				return

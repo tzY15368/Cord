@@ -11,11 +11,11 @@ import (
 
 func BenchmarkGOB(b *testing.B) {
 
-	data := proto.RequestVoteArgsT{
-		Term:   33333333,
-		Lindex: 6666,
-		Lterm:  999999,
-		Can:    4,
+	data := proto.RequestVoteArgs{
+		Term:         33333333,
+		LastLogIndex: 6666,
+		LastLogTerm:  999999,
+		CandidateID:  4,
 	}
 	gob.Register(data)
 
@@ -34,11 +34,11 @@ func BenchmarkGOB(b *testing.B) {
 
 func BenchmarkGOGOPB(b *testing.B) {
 
-	data := proto.RequestVoteArgsT{
-		Term:   33333333,
-		Lindex: 33333322,
-		Lterm:  999999,
-		Can:    4,
+	data := proto.RequestVoteArgs{
+		Term:         33333333,
+		LastLogIndex: 6666,
+		LastLogTerm:  999999,
+		CandidateID:  4,
 	}
 	for i := 0; i < b.N; i++ {
 		_, err := data.Marshal()

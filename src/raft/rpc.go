@@ -26,29 +26,31 @@ func (rf *Raft) HandleCall(ctx context.Context, in *proto.GenericArgs) (*proto.G
 	encoder := labgob.NewEncoder(outBuf)
 	switch in.Method {
 	case proto.GenericArgs_AppendEntries:
-		args := AppendEntriesArgs{}
-		err := decoder.Decode(&args)
+		args := proto.AppendEntriesArgs{}
+		err := args.Unmarshal(in.Data)
 		if err != nil {
 			panic(err)
 		}
-		reply := AppendEntriesReply{}
+		reply := proto.AppendEntriesReply{}
 		rf.AppendEntries(&args, &reply)
-		err = encoder.Encode(reply)
+		data, err := reply.Marshal()
 		if err != nil {
 			panic(err)
 		}
+		return &proto.GenericReply{Data: data}, nil
 	case proto.GenericArgs_RequestVote:
-		args := RequestVoteArgs{}
-		err := decoder.Decode(&args)
+		args := proto.RequestVoteArgs{}
+		err := args.Unmarshal(in.Data)
 		if err != nil {
 			panic(err)
 		}
-		reply := RequestVoteReply{}
+		reply := proto.RequestVoteReply{}
 		rf.RequestVote(&args, &reply)
-		err = encoder.Encode(reply)
+		data, err := reply.Marshal()
 		if err != nil {
 			panic(err)
 		}
+		return &proto.GenericReply{Data: data}, nil
 	case proto.GenericArgs_InstallSnapshot:
 		args := InstallSnapshotArgs{}
 		err := decoder.Decode(&args)
@@ -86,12 +88,7 @@ func (rf *Raft) HandleCall(ctx context.Context, in *proto.GenericArgs) (*proto.G
 
 func (c *GRPCClient) Call(method string, args interface{}, reply interface{}) bool {
 	c2 := proto.NewGenericServiceClient(c.Conn)
-	buf := new(bytes.Buffer)
-	encoder := labgob.NewEncoder(buf)
-	err := encoder.Encode(args)
-	if err != nil {
-		panic(err)
-	}
+
 	var _method proto.GenericArgs_Method
 	switch method {
 	case "Raft.AppendEntries":
@@ -103,7 +100,38 @@ func (c *GRPCClient) Call(method string, args interface{}, reply interface{}) bo
 	case "Raft.Start":
 		_method = proto.GenericArgs_Start
 	}
-	gArgs := proto.GenericArgs{Method: _method, Data: buf.Bytes()}
+	gArgs := proto.GenericArgs{Method: _method}
+	switch _method {
+	case proto.GenericArgs_AppendEntries:
+		aea, ok := args.(*proto.AppendEntriesArgs)
+		if !ok {
+			panic("bad conv ae")
+		}
+		data, err := aea.Marshal()
+		if err != nil {
+			panic(err)
+		}
+		gArgs.Data = data
+	case proto.GenericArgs_RequestVote:
+		rva, ok := args.(*proto.RequestVoteArgs)
+		if !ok {
+			panic("bad conv rv")
+		}
+		data, err := rva.Marshal()
+		if err != nil {
+			panic(err)
+		}
+		gArgs.Data = data
+	default:
+		buf := new(bytes.Buffer)
+		encoder := labgob.NewEncoder(buf)
+		err := encoder.Encode(args)
+		if err != nil {
+			panic(err)
+		}
+		gArgs.Data = buf.Bytes()
+	}
+
 	ctx := context.TODO()
 	clientDeadline := time.Now().Add(time.Duration(1 * time.Second))
 	ctx, cancel := context.WithDeadline(ctx, clientDeadline)
@@ -115,10 +143,24 @@ func (c *GRPCClient) Call(method string, args interface{}, reply interface{}) bo
 		return false
 	}
 
-	decoder := labgob.NewDecoder(bytes.NewBuffer(r.Data))
-	err = decoder.Decode(reply)
-	if err != nil {
-		panic(err)
+	switch _method {
+	case proto.GenericArgs_AppendEntries:
+		err := reply.(*proto.AppendEntriesReply).Unmarshal(r.Data)
+		if err != nil {
+			panic(err)
+		}
+	case proto.GenericArgs_RequestVote:
+		err := reply.(*proto.RequestVoteReply).Unmarshal(r.Data)
+		if err != nil {
+			panic(err)
+		}
+	default:
+		decoder := labgob.NewDecoder(bytes.NewBuffer(r.Data))
+		err = decoder.Decode(reply)
+		if err != nil {
+			panic(err)
+		}
 	}
+
 	return true
 }

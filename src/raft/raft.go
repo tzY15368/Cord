@@ -10,6 +10,7 @@ import (
 	"6.824/common"
 	"6.824/labrpc"
 	"6.824/logging"
+	"6.824/proto"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,7 +23,7 @@ type Raft struct {
 	peers     []Callable   // RPC end points of all peers
 	persister IPersistable // Object to hold this peer's persisted state
 	me        int          // this peer's index into peers[]
-
+	useLABRPC bool
 	// Your data here (2A, 2B, 2C).
 	// Look at the paper's Figure 2 for a description of what
 	// state a Raft server must maintain.
@@ -33,7 +34,7 @@ type Raft struct {
 	// Persistent state on all servers.
 	currentTerm int
 	votedFor    int
-	log         []LogEntry
+	log         []*proto.LogEntry
 
 	// Volatile state on all servers.
 	commitIndex int
@@ -88,13 +89,17 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		term = rf.currentTerm
 		index = rf.getLastLogIndex() + 1
 		rf.logger.WithField("command", command).WithField("at", time.Now()).Info("start: got command")
-		rf.log = append(rf.log, LogEntry{Index: index, Term: term, Command: command})
+		rf.log = append(rf.log, &proto.LogEntry{Index: int64(index), Term: int64(term), Command: common.EncodeCommand(command)})
 		go rf.broadcastAppendEntries()
 		rf.mu.Unlock()
 	} else {
-		fmt.Println("isn't leader, consulting", rf.leaderID)
 		leader := rf.leaderID
 		rf.mu.Unlock()
+		if rf.useLABRPC {
+			goto Return
+		} else {
+			fmt.Println("isn't leader, consulting", rf.leaderID)
+		}
 		reply := StartReply{}
 		if leader == rf.me {
 			goto Return
@@ -201,6 +206,7 @@ func Make(ipeers interface{}, me int,
 	peers, ok := ipeers.([]*labrpc.ClientEnd)
 	if ok {
 		fmt.Println("using labrpc")
+		rf.useLABRPC = true
 		iends := make([]Callable, len(peers))
 		for i := range iends {
 			iends[i] = peers[i]
@@ -233,7 +239,7 @@ func Make(ipeers interface{}, me int,
 
 	rf.currentTerm = 0
 	rf.votedFor = -1
-	rf.log = append(rf.log, LogEntry{Term: 0})
+	rf.log = append(rf.log, &proto.LogEntry{Term: 0})
 
 	rf.commitIndex = 0
 	rf.lastApplied = 0

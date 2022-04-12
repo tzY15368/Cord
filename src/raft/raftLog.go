@@ -3,16 +3,18 @@ package raft
 import (
 	"fmt"
 
+	"6.824/common"
+	"6.824/proto"
 	"github.com/sirupsen/logrus"
 )
 
-type LogEntry struct {
-	Term    int
-	Index   int
-	Command interface{}
-}
+// type LogEntry struct {
+// 	Term    int
+// 	Index   int
+// 	Command interface{}
+// }
 
-func (rf *Raft) hasConflictLog(leaderLog []LogEntry, localLog []LogEntry) bool {
+func (rf *Raft) hasConflictLog(leaderLog []*proto.LogEntry, localLog []*proto.LogEntry) bool {
 	for i := 0; i < len(leaderLog) && i < len(localLog); i++ {
 		if leaderLog[i].Term != localLog[i].Term {
 			return true
@@ -23,7 +25,7 @@ func (rf *Raft) hasConflictLog(leaderLog []LogEntry, localLog []LogEntry) bool {
 
 // dumpLog not thread safe
 func (rf *Raft) dumpLog() {
-	var logSlice []LogEntry
+	var logSlice []*proto.LogEntry
 	if len(rf.log) > 10 {
 		logSlice = rf.log[len(rf.log)-4:]
 	} else {
@@ -73,7 +75,7 @@ func (rf *Raft) unsafeCommitLog() {
 		msg := ApplyMsg{
 			CommandValid: true,
 			CommandIndex: i,
-			Command:      rf.log[i-baseIndex].Command,
+			Command:      common.DecodeCommand(rf.log[i-baseIndex].Command),
 		}
 		rf.logger.WithField("msg", msg).Debug("commit: msg=")
 		rf.applyMsgQueue.put(msg)
@@ -96,7 +98,7 @@ func (rf *Raft) getLastLogTerm() int {
 		}
 		return rf.lastIncludedTerm
 	}
-	return rf.log[len(rf.log)-1].Term
+	return int(rf.log[len(rf.log)-1].Term)
 }
 
 // getlastlogindex not thread safe
@@ -111,7 +113,7 @@ func (rf *Raft) getLastLogIndex() int {
 		}
 		return rf.lastIncludedIndex
 	}
-	return rf.log[len(rf.log)-1].Index
+	return int(rf.log[len(rf.log)-1].Index)
 }
 
 // 具体是什么？还得仔细想下
@@ -127,7 +129,7 @@ func (rf *Raft) getBaseLogIndex() int {
 		}
 		return rf.lastIncludedIndex
 	}
-	return rf.log[0].Index
+	return int(rf.log[0].Index)
 }
 
 // getLogTermAtOffset not thread safe
@@ -140,7 +142,7 @@ func (rf *Raft) getLogTermAtOffset(offset int) int {
 		}
 		return rf.lastIncludedTerm
 	}
-	return rf.log[offset].Term
+	return int(rf.log[offset].Term)
 }
 
 // getLogIndexAtOffset not thread safe
@@ -153,5 +155,5 @@ func (rf *Raft) getLogIndexAtOffset(offset int) int {
 		}
 		return rf.lastIncludedIndex
 	}
-	return rf.log[offset].Index
+	return int(rf.log[offset].Index)
 }

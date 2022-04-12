@@ -1,7 +1,9 @@
 package common
 
 import (
+	"bytes"
 	"crypto/rand"
+	"encoding/gob"
 	"math/big"
 	"time"
 
@@ -48,4 +50,30 @@ func Nrand() int64 {
 	bigx, _ := rand.Int(rand.Reader, max)
 	x := bigx.Int64()
 	return x
+}
+
+func EncodeCommand(data interface{}) []byte {
+	buf := new(bytes.Buffer)
+	encoder := gob.NewEncoder(buf)
+	err := encoder.Encode(&data)
+	// d, err := json.Marshal(&data)
+	if err != nil {
+		panic(err)
+	}
+	//fmt.Printf("%T encoding %+v\n", data, data)
+	return buf.Bytes()
+	//return d
+}
+
+func DecodeCommand(data []byte) interface{} {
+	var r interface{}
+	decoder := gob.NewDecoder(bytes.NewBuffer(data))
+	err := decoder.Decode(&r)
+	//err := json.Unmarshal(data, &r)
+
+	if err != nil {
+		panic(err)
+	}
+	//fmt.Printf("%T decoding %+v\n", r, r)
+	return r
 }

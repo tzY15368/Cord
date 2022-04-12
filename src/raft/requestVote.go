@@ -3,6 +3,7 @@ package raft
 import (
 	"fmt"
 
+	"6.824/proto"
 	"github.com/sirupsen/logrus"
 )
 
@@ -11,23 +12,23 @@ func (rf *Raft) isUpToDate(candidateTerm int, candidateIndex int) bool {
 	term, index := rf.getLastLogTerm(), rf.getLastLogIndex()
 	return candidateTerm > term || (candidateTerm == term && candidateIndex >= index)
 }
-func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
+func (rf *Raft) sendRequestVote(server int, args *proto.RequestVoteArgs, reply *proto.RequestVoteReply) bool {
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	defer rf.persist()
 
 	if ok {
-		if rf.state != STATE_CANDIDATE || rf.currentTerm != args.Term {
+		if rf.state != STATE_CANDIDATE || rf.currentTerm != int(args.Term) {
 			// invalid request
 			rf.logger.Warn("rpc: invalid request")
 			return ok
 		}
 
-		if rf.currentTerm < reply.Term {
+		if rf.currentTerm < int(reply.Term) {
 			// revert to follower state and update current term
 			rf.state = STATE_FOLLOWER
-			rf.currentTerm = reply.Term
+			rf.currentTerm = int(reply.Term)
 			rf.votedFor = -1
 			rf.logger.WithField("newTerm", rf.currentTerm).Info("appendEntry: became follower due to higher client term")
 		}
@@ -45,34 +46,34 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 	return ok
 }
 
-func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
+func (rf *Raft) RequestVote(args *proto.RequestVoteArgs, reply *proto.RequestVoteReply) {
 	// Your code here (2A, 2B).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	defer rf.persist()
 
-	if args.Term < rf.currentTerm {
+	if int(args.Term) < rf.currentTerm {
 		// reject request with stale term number
-		reply.Term = rf.currentTerm
+		reply.Term = int64(rf.currentTerm)
 		reply.VoteGranted = false
 		return
 	}
 
-	if args.Term > rf.currentTerm {
+	if int(args.Term) > rf.currentTerm {
 		// become follower and update current term
 		rf.state = STATE_FOLLOWER
-		rf.currentTerm = args.Term
+		rf.currentTerm = int(args.Term)
 		rf.votedFor = -1
 		rf.logger.WithField("newTerm", rf.currentTerm).Info("appendEntry: became follower due to higher client term")
 	}
 
-	reply.Term = rf.currentTerm
+	reply.Term = int64(rf.currentTerm)
 	reply.VoteGranted = false
 
-	logIsUpToDate := rf.isUpToDate(args.LastLogTerm, args.LastLogIndex)
-	if (rf.votedFor == -1 || rf.votedFor == args.CandidateId) && logIsUpToDate {
+	logIsUpToDate := rf.isUpToDate(int(args.LastLogTerm), int(args.LastLogIndex))
+	if (rf.votedFor == -1 || rf.votedFor == int(args.CandidateID)) && logIsUpToDate {
 		// vote for the candidate
-		rf.votedFor = args.CandidateId
+		rf.votedFor = int(args.CandidateID)
 		reply.VoteGranted = true
 		rf.chanGrantVote <- true
 	}
@@ -87,18 +88,19 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 func (rf *Raft) broadcastRequestVote() {
 	rf.mu.Lock()
-	args := &RequestVoteArgs{}
-	args.Term = rf.currentTerm
-	args.CandidateId = rf.me
-	args.LastLogIndex = rf.getLastLogIndex()
-	args.LastLogTerm = rf.getLastLogTerm()
+	args := &proto.RequestVoteArgs{
+		Term:         int64(rf.currentTerm),
+		CandidateID:  int64(rf.me),
+		LastLogIndex: int64(rf.getLastLogIndex()),
+		LastLogTerm:  int64(rf.getLastLogTerm()),
+	}
 	me := rf.me
 	state := rf.state
 	rf.mu.Unlock()
 
 	for server := range rf.peers {
 		if server != me && state == STATE_CANDIDATE {
-			go rf.sendRequestVote(server, args, &RequestVoteReply{})
+			go rf.sendRequestVote(server, args, &proto.RequestVoteReply{})
 		}
 	}
 }
