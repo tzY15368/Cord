@@ -18,3 +18,13 @@ BenchmarkPNaive-16         37902             32828 ns/op            4888 B/op   
 BenchmarkPMMAP-16         413799              2420 ns/op            4888 B/op          2 allocs/op
 PASS
 ok      6.824/diskpersister     2.802s
+
+
+goos: windows
+goarch: amd64
+pkg: 6.824/benches
+cpu: 12th Gen Intel(R) Core(TM) i5-12600K
+BenchmarkGOB-16           588189              1998 ns/op            2000 B/op         33 allocs/op
+BenchmarkGOGOPB-16      49070522                21.23 ns/op           16 B/op          1 allocs/op
+PASS
+ok      6.824/benches   3.285s
