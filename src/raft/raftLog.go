@@ -26,31 +26,31 @@ func (rf *Raft) hasConflictLog(leaderLog []*proto.LogEntry, localLog []*proto.Lo
 // dumpLog not thread safe
 func (rf *Raft) dumpLog() {
 	var logSlice []*proto.LogEntry
-	if len(rf.log) > 10 {
-		logSlice = rf.log[len(rf.log)-4:]
+	if len(rf.pState.Log) > 10 {
+		logSlice = rf.pState.Log[len(rf.pState.Log)-4:]
 	} else {
-		logSlice = rf.log
+		logSlice = rf.pState.Log
 	}
 	rf.logger.WithFields(logrus.Fields{
-		"actualLength":      len(rf.log),
+		"actualLength":      len(rf.pState.Log),
 		"lastApplied":       rf.lastApplied,
 		"commitIndex":       rf.commitIndex,
-		"lastIncludedIndex": rf.lastIncludedIndex,
+		"lastIncludedIndex": rf.pState.LastIncludedIndex,
 	}).Debugf("log: %+v", logSlice)
 }
 
 func (rf *Raft) dumpLogFields() *logrus.Entry {
 	logString := ""
-	if len(rf.log) > 3 {
-		logString += fmt.Sprintf("%+v", rf.log[0])
+	if len(rf.pState.Log) > 3 {
+		logString += fmt.Sprintf("%+v", rf.pState.Log[0])
 		logString += "..."
-		logString += fmt.Sprintf("%+v", rf.log[len(rf.log)-2:])
+		logString += fmt.Sprintf("%+v", rf.pState.Log[len(rf.pState.Log)-2:])
 	} else {
-		logString = fmt.Sprintf("%+v", rf.log)
+		logString = fmt.Sprintf("%+v", rf.pState.Log)
 	}
 	return rf.logger.WithFields(logrus.Fields{
-		"lastIncludedIndex": rf.lastIncludedIndex,
-		"actualLen":         len(rf.log),
+		"lastIncludedIndex": rf.pState.LastIncludedIndex,
+		"actualLen":         len(rf.pState.Log),
 		"log":               logString,
 	})
 }
@@ -64,7 +64,7 @@ func (rf *Raft) SafeDumpLogFields() *logrus.Entry {
 
 func (rf *Raft) commitLog() {
 	rf.mu.Lock()
-	//	baseIndex := rf.log[0].Index
+	//	baseIndex := rf.pState.Log[0].Index
 	rf.unsafeCommitLog()
 	rf.mu.Unlock()
 }
@@ -75,7 +75,7 @@ func (rf *Raft) unsafeCommitLog() {
 		msg := ApplyMsg{
 			CommandValid: true,
 			CommandIndex: i,
-			Command:      common.DecodeCommand(rf.log[i-baseIndex].Command),
+			Command:      common.DecodeCommand(rf.pState.Log[i-baseIndex].Command),
 		}
 		rf.logger.WithField("msg", msg).Debug("commit: msg=")
 		rf.applyMsgQueue.put(msg)
@@ -88,72 +88,72 @@ func (rf *Raft) unsafeCommitLog() {
 
 // get lastlog term not thread safe
 func (rf *Raft) getLastLogTerm() int {
-	if len(rf.log) == 0 {
-		if rf.lastIncludedTerm == 0 {
+	if len(rf.pState.Log) == 0 {
+		if rf.pState.LastIncludedTerm == 0 {
 			rf.logger.Panic("log: invalid log state:term")
 		} else {
 			rf.logger.
-				WithField("lastIncludedTerm", rf.lastIncludedTerm).
+				WithField("lastIncludedTerm", rf.pState.LastIncludedTerm).
 				Debug("no existing logs, returning lastincludedTerm")
 		}
-		return rf.lastIncludedTerm
+		return int(rf.pState.LastIncludedTerm)
 	}
-	return int(rf.log[len(rf.log)-1].Term)
+	return int(rf.pState.Log[len(rf.pState.Log)-1].Term)
 }
 
 // getlastlogindex not thread safe
 func (rf *Raft) getLastLogIndex() int {
-	if len(rf.log) == 0 {
-		if rf.lastIncludedIndex == 0 {
+	if len(rf.pState.Log) == 0 {
+		if rf.pState.LastIncludedIndex == 0 {
 			rf.logger.Panic("log: invalid log state:index")
 		} else {
 			rf.logger.
-				WithField("lastIncludedIndex", rf.lastIncludedIndex).
+				WithField("lastIncludedIndex", rf.pState.LastIncludedIndex).
 				Debug("no existing logs, returning lastincludedIndex")
 		}
-		return rf.lastIncludedIndex
+		return int(rf.pState.LastIncludedIndex)
 	}
-	return int(rf.log[len(rf.log)-1].Index)
+	return int(rf.pState.Log[len(rf.pState.Log)-1].Index)
 }
 
 // 具体是什么？还得仔细想下
 // 目的是正确处理空log的情况
 func (rf *Raft) getBaseLogIndex() int {
-	if len(rf.log) == 0 {
-		if rf.lastIncludedIndex == 0 {
+	if len(rf.pState.Log) == 0 {
+		if rf.pState.LastIncludedIndex == 0 {
 			rf.logger.Panic("log: invalid log state:index")
 		} else {
 			rf.logger.
-				WithField("lastIncludedIndex", rf.lastIncludedIndex).
+				WithField("lastIncludedIndex", rf.pState.LastIncludedIndex).
 				Debug("no existing logs, returning lastincludedIndex")
 		}
-		return rf.lastIncludedIndex
+		return int(rf.pState.LastIncludedIndex)
 	}
-	return int(rf.log[0].Index)
+	return int(rf.pState.Log[0].Index)
 }
 
 // getLogTermAtOffset not thread safe
 func (rf *Raft) getLogTermAtOffset(offset int) int {
-	if len(rf.log) == 0 {
-		if offset != 0 && rf.lastIncludedTerm == 0 {
+	if len(rf.pState.Log) == 0 {
+		if offset != 0 && rf.pState.LastIncludedTerm == 0 {
 			rf.logger.WithFields(logrus.Fields{
-				"index": offset, "lastIncludedTerm": rf.lastIncludedTerm,
+				"index": offset, "lastIncludedTerm": rf.pState.LastIncludedTerm,
 			}).Panic("invalid state")
 		}
-		return rf.lastIncludedTerm
+		return int(rf.pState.LastIncludedTerm)
 	}
-	return int(rf.log[offset].Term)
+	return int(rf.pState.Log[offset].Term)
 }
 
 // getLogIndexAtOffset not thread safe
 func (rf *Raft) getLogIndexAtOffset(offset int) int {
-	if len(rf.log) == 0 {
-		if offset != 0 && rf.lastIncludedIndex == 0 {
+	if len(rf.pState.Log) == 0 {
+		if offset != 0 && rf.pState.LastIncludedIndex == 0 {
 			rf.logger.WithFields(logrus.Fields{
-				"index": offset, "lastIncludedindex": rf.lastIncludedIndex,
+				"index": offset, "lastIncludedindex": rf.pState.LastIncludedIndex,
 			}).Panic("invalid state")
 		}
-		return rf.lastIncludedIndex
+		return int(rf.pState.LastIncludedIndex)
 	}
-	return int(rf.log[offset].Index)
+	return int(rf.pState.Log[offset].Index)
 }

@@ -38,7 +38,7 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	fields := logrus.Fields{
 		"index": index, "commitIndex": rf.commitIndex, "baseIndex": baseIndex,
 	}
-	if rf.lastIncludedIndex >= index {
+	if int(rf.pState.LastIncludedIndex) >= index {
 		return
 	}
 	if baseIndex > rf.commitIndex {
@@ -55,22 +55,22 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	if newIndex == 0 {
 		offset = 0
 	}
-	if offset < 0 || offset > len(rf.log)-1 {
+	if offset < 0 || offset > len(rf.pState.Log)-1 {
 		rf.logger.WithFields(logrus.Fields{
-			"lastIncludedIindex": rf.lastIncludedIndex,
+			"lastIncludedIindex": rf.pState.LastIncludedIndex,
 		}).Warn("snapshot: offset < 0, doing absolute nothing")
 		return
 	}
 	rf.dumpLogFields().Debug("snapshot: before compaction:")
-	lastIncludedEntry := rf.log[offset]
+	lastIncludedEntry := rf.pState.Log[offset]
 
 	// handle snapshot
-	rf.lastIncludedIndex = int(lastIncludedEntry.Index)
-	rf.lastIncludedTerm = int(lastIncludedEntry.Term)
+	rf.pState.LastIncludedIndex = lastIncludedEntry.Index
+	rf.pState.LastIncludedTerm = lastIncludedEntry.Term
 	rf.snapshot = snapshot
 
 	// log compaction
-	rf.log = rf.log[newIndex:]
+	rf.pState.Log = rf.pState.Log[newIndex:]
 
 	rf.dumpLogFields().WithFields(logrus.Fields{
 		"base": baseIndex, "len": newIndex, "lastIncludedIndex": lastIncludedEntry.Index,
@@ -84,20 +84,20 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	rf.logger.Info("snapshot: installing snapshot")
 
 	baseIndex := rf.getBaseLogIndex()
-	if args.Term < rf.currentTerm {
-		reply.Term = rf.currentTerm
+	if args.Term < int(rf.pState.CurrentTerm) {
+		reply.Term = int(rf.pState.CurrentTerm)
 		return
 	}
 
-	if args.Term > rf.currentTerm {
+	if args.Term > int(rf.pState.CurrentTerm) {
 		rf.state = STATE_FOLLOWER
-		rf.currentTerm = args.Term
-		rf.votedFor = -1
-		rf.logger.WithField("newTerm", rf.currentTerm).
+		rf.pState.CurrentTerm = int64(args.Term)
+		rf.pState.VotedFor = -1
+		rf.logger.WithField("newTerm", rf.pState.CurrentTerm).
 			Info("snapshot: became follower due to higher client term")
 	}
 	rf.chanHeartbeat <- true
-	reply.Term = rf.currentTerm
+	reply.Term = int(rf.pState.CurrentTerm)
 	if args.LastIncludedIndex <= baseIndex {
 		rf.logger.WithFields(logrus.Fields{
 			"lastincludedindex": args.LastIncludedIndex,
@@ -108,10 +108,10 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	rf.snapshot = args.Data
 	rf.lastApplied = args.LastIncludedIndex
 	rf.commitIndex = args.LastIncludedIndex
-	rf.currentTerm = args.Term
-	rf.lastIncludedIndex = args.LastIncludedIndex
-	rf.lastIncludedTerm = args.LastIncludedTerm
-	rf.log = make([]*proto.LogEntry, 0)
+	rf.pState.CurrentTerm = int64(args.Term)
+	rf.pState.LastIncludedIndex = int64(args.LastIncludedIndex)
+	rf.pState.LastIncludedTerm = int64(args.LastIncludedTerm)
+	rf.pState.Log = make([]*proto.LogEntry, 0)
 	rf.dumpLogFields().Debug("snapshot: log truncated")
 	// todo: ignore leaderid for now
 	msg := ApplyMsg{
@@ -140,8 +140,8 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply *InstallSnapshotReply) bool {
 	if args.LastIncludedIndex*args.LastIncludedTerm == 0 {
 		rf.logger.WithFields(logrus.Fields{
-			"lastincludedindex": rf.lastIncludedIndex,
-			"lastincludedterm":  rf.lastIncludedTerm,
+			"lastincludedindex": rf.pState.LastIncludedIndex,
+			"lastincludedterm":  rf.pState.LastIncludedTerm,
 		}).Panic("snapshot: invalid last included")
 	}
 	rf.logger.WithField("args", fmt.Sprintf("%+v", args)).Debug("snapshot: args:")
@@ -152,11 +152,11 @@ func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply
 	defer rf.persist()
 	if ok {
 		// sendinstallsnapshot需要在返回后处理nextindex【server】的变化
-		if reply.Term > rf.currentTerm {
+		if int64(reply.Term) > rf.pState.CurrentTerm {
 			rf.state = STATE_FOLLOWER
-			rf.currentTerm = reply.Term
-			rf.votedFor = -1
-			rf.logger.WithField("newTerm", rf.currentTerm).
+			rf.pState.CurrentTerm = int64(reply.Term)
+			rf.pState.VotedFor = -1
+			rf.logger.WithField("newTerm", rf.pState.CurrentTerm).
 				Info("snapshot: became follower due to higher client term")
 			return false
 		}

@@ -32,9 +32,12 @@ type Raft struct {
 	voteCount int
 
 	// Persistent state on all servers.
-	currentTerm int
-	votedFor    int
-	log         []*proto.LogEntry
+	pState *proto.PersistedState
+	// currentTerm       int
+	// votedFor          int
+	// log               []*proto.LogEntry
+	// lastIncludedTerm  int
+	// lastIncludedIndex int
 
 	// Volatile state on all servers.
 	commitIndex int
@@ -57,9 +60,7 @@ type Raft struct {
 	applyMsgQueue *msgQueue
 	// snapshot
 
-	snapshot          []byte
-	lastIncludedTerm  int
-	lastIncludedIndex int
+	snapshot []byte
 }
 
 // return currentTerm and whether this server
@@ -68,7 +69,7 @@ func (rf *Raft) GetState() (int, bool) {
 	// Your code here (2A).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	term := rf.currentTerm
+	term := int(rf.pState.CurrentTerm)
 	isleader := (rf.state == STATE_LEADER)
 	return term, isleader
 }
@@ -86,10 +87,14 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	term, index := 0, 0
 	isLeader := (rf.state == STATE_LEADER)
 	if isLeader {
-		term = rf.currentTerm
+		term = int(rf.pState.CurrentTerm)
 		index = rf.getLastLogIndex() + 1
 		rf.logger.WithField("command", command).WithField("at", time.Now()).Info("start: got command")
-		rf.log = append(rf.log, &proto.LogEntry{Index: int64(index), Term: int64(term), Command: common.EncodeCommand(command)})
+		rf.pState.Log = append(rf.pState.Log, &proto.LogEntry{
+			Index:   int64(index),
+			Term:    int64(term),
+			Command: common.EncodeCommand(command),
+		})
 		go rf.broadcastAppendEntries()
 		rf.mu.Unlock()
 	} else {
@@ -157,9 +162,9 @@ func (rf *Raft) ticker() {
 			time.Sleep(hearbeatInterval)
 		case STATE_CANDIDATE:
 			rf.mu.Lock()
-			rf.currentTerm++
-			rf.logger.WithField("term", rf.currentTerm).Info("election: became candidate")
-			rf.votedFor = rf.me
+			rf.pState.CurrentTerm++
+			rf.logger.WithField("term", rf.pState.CurrentTerm).Info("election: became candidate")
+			rf.pState.VotedFor = int64(rf.me)
 			rf.voteCount = 1
 			rf.persist()
 			rf.mu.Unlock()
@@ -173,7 +178,7 @@ func (rf *Raft) ticker() {
 			case <-rf.chanWinElect:
 				rf.mu.Lock()
 				rf.logger.WithFields(logrus.Fields{
-					"term": rf.currentTerm,
+					"term": rf.pState.CurrentTerm,
 					"at":   time.Now(),
 				}).Info("election: became leader")
 				// rf.nextIndex = make([]int, len(rf.peers))
@@ -185,7 +190,7 @@ func (rf *Raft) ticker() {
 				rf.mu.Unlock()
 			case <-time.After(electionTimeout):
 				rf.mu.Lock()
-				rf.logger.WithField("term", rf.currentTerm).Info("election: timeout")
+				rf.logger.WithField("term", rf.pState.CurrentTerm).Info("election: timeout")
 				rf.mu.Unlock()
 				additionalSleepTime := time.Duration(rand.Intn(30)) * time.Millisecond
 				time.Sleep(additionalSleepTime)
@@ -236,10 +241,16 @@ func Make(ipeers interface{}, me int,
 	// Your initialization code here (2A, 2B, 2C).
 	rf.state = STATE_FOLLOWER
 	rf.voteCount = 0
-
-	rf.currentTerm = 0
-	rf.votedFor = -1
-	rf.log = append(rf.log, &proto.LogEntry{Term: 0})
+	rf.pState = &proto.PersistedState{
+		CurrentTerm:       0,
+		VotedFor:          -1,
+		Log:               []*proto.LogEntry{{Term: 0}},
+		LastIncludedTerm:  0,
+		LastIncludedIndex: 0,
+	}
+	// rf.pState.CurrentTerm = 0
+	// rf.pState.VotedFor = -1
+	// rf.pState.Log = append(rf.pState.Log, &proto.LogEntry{Term: 0})
 
 	rf.commitIndex = 0
 	rf.lastApplied = 0

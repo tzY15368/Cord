@@ -19,18 +19,18 @@ func (rf *Raft) sendRequestVote(server int, args *proto.RequestVoteArgs, reply *
 	defer rf.persist()
 
 	if ok {
-		if rf.state != STATE_CANDIDATE || rf.currentTerm != int(args.Term) {
+		if rf.state != STATE_CANDIDATE || rf.pState.CurrentTerm != args.Term {
 			// invalid request
 			rf.logger.Warn("rpc: invalid request")
 			return ok
 		}
 
-		if rf.currentTerm < int(reply.Term) {
+		if rf.pState.CurrentTerm < reply.Term {
 			// revert to follower state and update current term
 			rf.state = STATE_FOLLOWER
-			rf.currentTerm = int(reply.Term)
-			rf.votedFor = -1
-			rf.logger.WithField("newTerm", rf.currentTerm).Info("appendEntry: became follower due to higher client term")
+			rf.pState.CurrentTerm = reply.Term
+			rf.pState.VotedFor = -1
+			rf.logger.WithField("newTerm", rf.pState.CurrentTerm).Info("appendEntry: became follower due to higher client term")
 		}
 
 		if reply.VoteGranted {
@@ -52,34 +52,34 @@ func (rf *Raft) RequestVote(args *proto.RequestVoteArgs, reply *proto.RequestVot
 	defer rf.mu.Unlock()
 	defer rf.persist()
 
-	if int(args.Term) < rf.currentTerm {
+	if args.Term < rf.pState.CurrentTerm {
 		// reject request with stale term number
-		reply.Term = int64(rf.currentTerm)
+		reply.Term = int64(rf.pState.CurrentTerm)
 		reply.VoteGranted = false
 		return
 	}
 
-	if int(args.Term) > rf.currentTerm {
+	if args.Term > rf.pState.CurrentTerm {
 		// become follower and update current term
 		rf.state = STATE_FOLLOWER
-		rf.currentTerm = int(args.Term)
-		rf.votedFor = -1
-		rf.logger.WithField("newTerm", rf.currentTerm).Info("appendEntry: became follower due to higher client term")
+		rf.pState.CurrentTerm = args.Term
+		rf.pState.VotedFor = -1
+		rf.logger.WithField("newTerm", rf.pState.CurrentTerm).Info("appendEntry: became follower due to higher client term")
 	}
 
-	reply.Term = int64(rf.currentTerm)
+	reply.Term = int64(rf.pState.CurrentTerm)
 	reply.VoteGranted = false
 
 	logIsUpToDate := rf.isUpToDate(int(args.LastLogTerm), int(args.LastLogIndex))
-	if (rf.votedFor == -1 || rf.votedFor == int(args.CandidateID)) && logIsUpToDate {
+	if (rf.pState.VotedFor == -1 || rf.pState.VotedFor == args.CandidateID) && logIsUpToDate {
 		// vote for the candidate
-		rf.votedFor = int(args.CandidateID)
+		rf.pState.VotedFor = args.CandidateID
 		reply.VoteGranted = true
 		rf.chanGrantVote <- true
 	}
 	rf.logger.WithFields(logrus.Fields{
 		"voteGranted":  reply.VoteGranted,
-		"votedFor":     rf.votedFor,
+		"votedFor":     rf.pState.VotedFor,
 		"args":         fmt.Sprintf("%+v", args),
 		"lastLogTerm":  rf.getLastLogTerm(),
 		"lastLogIndex": rf.getLastLogIndex(),
@@ -89,7 +89,7 @@ func (rf *Raft) RequestVote(args *proto.RequestVoteArgs, reply *proto.RequestVot
 func (rf *Raft) broadcastRequestVote() {
 	rf.mu.Lock()
 	args := &proto.RequestVoteArgs{
-		Term:         int64(rf.currentTerm),
+		Term:         int64(rf.pState.CurrentTerm),
 		CandidateID:  int64(rf.me),
 		LastLogIndex: int64(rf.getLastLogIndex()),
 		LastLogTerm:  int64(rf.getLastLogTerm()),
