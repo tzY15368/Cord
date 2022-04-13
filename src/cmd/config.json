@@ -9,7 +9,7 @@
         "server": "debug",
         "dataStore": "info"
     },
-    "snapshotThres": 1000,
+    "snapshotThres": 5000,
     "me": -1,
     "applyTimeoutMil": 800
 }

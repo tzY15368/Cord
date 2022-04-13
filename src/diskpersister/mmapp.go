@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync"
 
+	"6.824/common"
 	"github.com/edsrzf/mmap-go"
 )
 
@@ -18,6 +19,7 @@ type MMapPersister struct {
 	// maxsize(bytes)
 	maxSize          int64
 	currentLogOffset int64
+	id               int64
 }
 
 func (mp *MMapPersister) PersistInt64(data int64, offset int64) {
@@ -94,6 +96,7 @@ func NewMMapPersister(raftFname string, snapshotFname string, maxSize int64) *MM
 		snapshotMem:      memss,
 		maxSize:          maxSize,
 		currentLogOffset: 0,
+		id:               common.Nrand(),
 	}
 }
 
@@ -195,10 +198,6 @@ func Write(_mem *mmap.MMap, resizeMem func(int64) (*mmap.MMap, error), data *[]b
 	if n != len(*data) {
 		panic("wrong len")
 	}
-
-	if allowResize {
-		//fmt.Println("wrote bytes", n)
-	}
 	casted := make([]byte, 8)
 	binary.LittleEndian.PutUint64(casted, uint64(len(*data)))
 
@@ -247,11 +246,13 @@ func (mp *MMapPersister) ReadSnapshot() []byte {
 func (mp *MMapPersister) RaftStateSize() int {
 	mp.rwmu.RLock()
 	defer mp.rwmu.RUnlock()
+	fmt.Println("mmapp: report raft size:", mp.id, Size(&mp.raftMem))
 	return Size(&mp.raftMem)
 }
 
 func (mp *MMapPersister) SnapshotSize() int {
 	mp.rwmu.RLock()
 	defer mp.rwmu.RUnlock()
+	fmt.Println("mmapp: report snap size:", mp.id, Size(&mp.snapshotMem))
 	return Size(&mp.snapshotMem)
 }

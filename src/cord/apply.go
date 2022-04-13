@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"sync/atomic"
 
-	"6.824/cord/kv"
+	"6.824/cord/intf"
 	"6.824/proto"
 	"github.com/sirupsen/logrus"
 )
@@ -16,7 +16,7 @@ func (cs *CordServer) tryStartSnapshot() bool {
 	}
 	cs.logger.WithFields(logrus.Fields{
 		"maxstate": cs.maxRaftState * 9 / 10,
-		"current":  cs.rf.GetStateSize(),
+		"current":  cs.Persister.RaftStateSize(),
 	}).Debug("considering snapshot")
 	if cs.maxRaftState*9/10 < int64(cs.rf.GetStateSize()) {
 		swapped := atomic.CompareAndSwapInt32(&cs.inSnapshot, 0, 1)
@@ -35,7 +35,7 @@ func (cs *CordServer) handleApply() {
 				panic("conversion error:" + reflect.TypeOf(msg.Command).String())
 			}
 			fmt.Println("inbound command: ", msg.CommandIndex)
-			var res *kv.EvalResult
+			var res intf.IEvalResult
 			var dump []byte
 			ss := cs.tryStartSnapshot()
 			res, dump = cs.kvStore.EvalCMD(&args, ss)
@@ -54,7 +54,7 @@ func (cs *CordServer) handleApply() {
 				default:
 				}
 			} else {
-				ch = make(chan *kv.EvalResult, 1)
+				ch = make(chan intf.IEvalResult, 1)
 				cs.notify[int64(msg.CommandIndex)] = ch
 			}
 			cs.mu.Unlock()

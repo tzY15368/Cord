@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"6.824/cord/cdc"
+	"6.824/cord/intf"
 	"6.824/logging"
 	"6.824/proto"
 	"github.com/sirupsen/logrus"
@@ -27,40 +28,81 @@ type DataChangeHandler interface {
 }
 
 type EvalResult struct {
-	Err     error
-	Data    map[string]string
-	Info    *proto.RequestInfo
-	Watches []*cdc.WatchResult
+	err     error
+	data    map[string]string
+	info    *proto.RequestInfo
+	watches []*cdc.WatchResult
+}
+
+func (er *EvalResult) GetError() error {
+	return er.err
+}
+
+func (er *EvalResult) GetData() map[string]string {
+	return er.data
+}
+
+func (er *EvalResult) GetClientID() int64 {
+	if er.info == nil {
+		return -1
+	}
+	return er.info.ClientID
+}
+func (er *EvalResult) GetRequestID() int64 {
+	if er.info == nil {
+		return -1
+	}
+	return er.info.RequestID
+}
+
+func (er *EvalResult) AwaitWatches() map[string]string {
+	d := make(map[string]string)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, watch := range er.watches {
+		wg.Add(1)
+		go func(c *cdc.WatchResult) {
+			data := <-c.Notify
+			fmt.Println("got output", data)
+			mu.Lock()
+			d[c.Key] = data
+			mu.Unlock()
+			c.Callback()
+			wg.Done()
+		}(watch)
+	}
+	wg.Wait()
+	return d
+
 }
 
 var ErrGetOnly = errors.New("err get only in unserializable reads")
 var ErrNoWatch = errors.New("err watches not enabled")
 var ErrNotImpl = errors.New("err not impl")
 
-func NewTempKVStore() *TempKVStore {
+func NewTempKVStore(watchEnabled bool) *TempKVStore {
 	tks := &TempKVStore{
 		dataStore: proto.TempKVStore{Data: make(map[string]*proto.KVEntry)},
 		ack:       proto.AckMap{Ack: make(map[int64]int64)},
 		logger:    logging.GetLogger("kvs", logrus.InfoLevel),
 	}
+	if watchEnabled {
+		tks.dataChangeHandlers = cdc.NewDCC()
+	}
 	return tks
 }
 
-func (kvs *TempKVStore) SetCDC(dch DataChangeHandler) {
-	kvs.dataChangeHandlers = dch
-}
-
-func (kvs *TempKVStore) EvalCMDUnlinearizable(args *proto.ServiceArgs) *EvalResult {
+func (kvs *TempKVStore) EvalCMDUnlinearizable(args *proto.ServiceArgs) intf.IEvalResult {
 	reply := &EvalResult{
-		Data: make(map[string]string),
+		data: make(map[string]string),
 	}
 	kvs.mu.RLock()
 	for _, cmd := range args.Cmds {
 		if cmd.OpType != proto.CmdArgs_GET {
-			reply.Err = ErrGetOnly
+			reply.err = ErrGetOnly
 			break
 		}
-		reply.Data[cmd.OpKey] = kvs.dataStore.Data[cmd.OpKey].Data
+		reply.data[cmd.OpKey] = kvs.dataStore.Data[cmd.OpKey].Data
 	}
 	defer kvs.mu.RUnlock()
 	return reply
@@ -88,15 +130,15 @@ func dataExpired(ttl int64) bool {
 	return ttl < now
 }
 
-func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (reply *EvalResult, dump []byte) {
-	reply = &EvalResult{
-		Data:    make(map[string]string),
-		Info:    args.Info,
-		Watches: make([]*cdc.WatchResult, 0),
+func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (intf.IEvalResult, []byte) {
+	reply := &EvalResult{
+		data:    make(map[string]string),
+		info:    args.Info,
+		watches: make([]*cdc.WatchResult, 0),
 	}
 	if kvs.isDuplicate(args.Info) {
 		kvs.logger.WithField("Args", fmt.Sprintf("%+v", args)).Warn("duplicate request")
-		return
+		return reply, nil
 	}
 	var lockWrite = shouldSnapshot
 	if !shouldSnapshot {
@@ -124,32 +166,32 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (r
 							fmt.Println("ttl reached")
 							delete(kvs.dataStore.Data, key)
 						} else {
-							reply.Data[key] = entry.Data
+							reply.data[key] = entry.Data
 
 						}
 					}
 				}
-				return
+				return reply, nil
 			} else if cmd.OpKey == "*" {
 				for key, entry := range kvs.dataStore.Data {
 					if dataExpired(entry.Ttl) {
 						fmt.Println("ttl reached")
 						delete(kvs.dataStore.Data, key)
 					} else {
-						reply.Data[key] = entry.Data
+						reply.data[key] = entry.Data
 
 					}
 				}
-				return
+				return reply, nil
 			}
 			entry := kvs.dataStore.Data[cmd.OpKey]
-			reply.Data[cmd.OpKey] = ""
+			reply.data[cmd.OpKey] = ""
 			if entry != nil {
 				if dataExpired(entry.Ttl) {
 					fmt.Println("ttl reached")
 					delete(kvs.dataStore.Data, cmd.OpKey)
 				} else {
-					reply.Data[cmd.OpKey] = entry.Data
+					reply.data[cmd.OpKey] = entry.Data
 				}
 			}
 		case proto.CmdArgs_APPEND:
@@ -176,14 +218,14 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (r
 			}
 		case proto.CmdArgs_WATCH:
 			if kvs.dataChangeHandlers == nil {
-				reply.Err = ErrNoWatch
-				return
+				reply.err = ErrNoWatch
+				return reply, nil
 			}
 			watchResult, err := kvs.dataChangeHandlers.Watch(cmd.OpKey)
 			if err != nil {
-				reply.Err = err
+				reply.err = err
 			} else {
-				reply.Watches = append(reply.Watches, watchResult)
+				reply.watches = append(reply.watches, watchResult)
 			}
 		case proto.CmdArgs_DELETE:
 			// 删除不存在的key不应该唤醒watch
@@ -193,15 +235,16 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (r
 			}
 
 		default:
-			reply.Err = ErrNotImpl
-			return
+			reply.err = ErrNotImpl
+			return reply, nil
 		}
 	}
+	var dump []byte
 	if shouldSnapshot {
-		dump, reply.Err = kvs.dataStore.Marshal()
+		dump, reply.err = kvs.dataStore.Marshal()
 		fmt.Println("snapshot: got dump bytes", len(dump))
 	}
-	return
+	return reply, dump
 }
 
 func (kvs *TempKVStore) LoadSnapshot(data []byte) {

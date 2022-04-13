@@ -9,7 +9,7 @@ import (
 
 	"6.824/common"
 	"6.824/config"
-	"6.824/cord/cdc"
+	"6.824/cord/intf"
 	"6.824/cord/kv"
 	"6.824/diskpersister"
 	"6.824/logging"
@@ -20,9 +20,8 @@ import (
 )
 
 type IKVStore interface {
-	EvalCMDUnlinearizable(*proto.ServiceArgs) *kv.EvalResult
-	EvalCMD(*proto.ServiceArgs, bool) (*kv.EvalResult, []byte)
-	SetCDC(kv.DataChangeHandler)
+	EvalCMDUnlinearizable(*proto.ServiceArgs) intf.IEvalResult
+	EvalCMD(*proto.ServiceArgs, bool) (intf.IEvalResult, []byte)
 	LoadSnapshot([]byte)
 }
 
@@ -33,11 +32,10 @@ type CordServer struct {
 	bootConfig       *config.CordConfig
 	applyChan        chan raft.ApplyMsg
 	localRequestInfo *proto.RequestInfo
-	notify           map[int64]chan *kv.EvalResult
+	notify           map[int64]chan intf.IEvalResult
 	logger           *logrus.Entry
 	maxRaftState     int64
 	watchEnabled     bool
-	cdc              *cdc.DataChangeCapturer
 	inSnapshot       int32
 	Persister        raft.IPersistable
 }
@@ -52,7 +50,7 @@ func NewCordServer(cfg *config.CordConfig) *CordServer {
 		5000,
 	)
 	cs := &CordServer{
-		kvStore:    kv.NewTempKVStore(),
+		kvStore:    kv.NewTempKVStore(cfg.WatchEnabled),
 		bootConfig: cfg,
 		applyChan:  applyCh,
 		//rf:               raft.Make(cfg.MakeGRPCClients(), cfg.Me, raft.MakePersister(), applyCh),
@@ -60,12 +58,10 @@ func NewCordServer(cfg *config.CordConfig) *CordServer {
 		watchEnabled:     cfg.WatchEnabled,
 		logger:           logging.GetLogger("server", logrus.DebugLevel).WithField("id", cfg.Me),
 		maxRaftState:     int64(cfg.SnapshotThres),
-		notify:           make(map[int64]chan *kv.EvalResult),
+		notify:           make(map[int64]chan intf.IEvalResult),
 		localRequestInfo: &proto.RequestInfo{ClientID: clientID, RequestID: RequestID},
-		cdc:              cdc.NewDCC(),
 		Persister:        persister,
 	}
-	cs.kvStore.SetCDC(cs.cdc)
 	go func() {
 		server := grpc.NewServer()
 		proto.RegisterGenericServiceServer(server, cs.rf)
@@ -94,26 +90,14 @@ func (cs *CordServer) CreateRequestInfo() proto.RequestInfo {
 func (cs *CordServer) HandleRequest(ctx context.Context, in *proto.ServiceArgs) (*proto.ServiceReply, error) {
 	reply := &proto.ServiceReply{}
 	evalResult := cs.propose(*in)
-	reply.Result = evalResult.Data
-	// aggregate watch results if necessary
-	if len(evalResult.Watches) > 0 {
-		fmt.Printf("result:--%+v", *evalResult.Watches[0])
+	err := evalResult.GetError()
+	if err != nil {
+		return nil, err
 	}
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	for _, watch := range evalResult.Watches {
-		wg.Add(1)
-		go func(c *cdc.WatchResult) {
-			data := <-c.Notify
-			fmt.Println("got output", data)
-			mu.Lock()
-			reply.Result[c.Key] = data
-			mu.Unlock()
-			c.Callback()
-			wg.Done()
-		}(watch)
+	reply.Result = evalResult.GetData()
+	watchedData := evalResult.AwaitWatches()
+	for key := range watchedData {
+		reply.Result[key] = watchedData[key]
 	}
-	wg.Wait()
-
-	return reply, evalResult.Err
+	return reply, nil
 }
