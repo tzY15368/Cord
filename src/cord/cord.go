@@ -20,8 +20,7 @@ import (
 )
 
 type IKVStore interface {
-	EvalCMDUnlinearizable(*proto.ServiceArgs) intf.IEvalResult
-	EvalCMD(*proto.ServiceArgs, bool) (intf.IEvalResult, []byte)
+	EvalCMD(*proto.ServiceArgs, bool, bool) (intf.IEvalResult, []byte)
 	LoadSnapshot([]byte)
 }
 
@@ -38,6 +37,7 @@ type CordServer struct {
 	watchEnabled     bool
 	inSnapshot       int32
 	Persister        raft.IPersistable
+	ack              proto.AckMap
 }
 
 func NewCordServer(cfg *config.CordConfig) *CordServer {
@@ -50,6 +50,7 @@ func NewCordServer(cfg *config.CordConfig) *CordServer {
 		5000,
 	)
 	cs := &CordServer{
+		ack:        proto.AckMap{Ack: make(map[int64]int64)},
 		kvStore:    kv.NewTempKVStore(cfg.WatchEnabled),
 		bootConfig: cfg,
 		applyChan:  applyCh,

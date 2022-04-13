@@ -17,7 +17,6 @@ import (
 type TempKVStore struct {
 	mu                 sync.RWMutex
 	dataStore          proto.TempKVStore
-	ack                proto.AckMap
 	dataChangeHandlers DataChangeHandler
 	logger             *logrus.Logger
 }
@@ -83,43 +82,12 @@ var ErrNotImpl = errors.New("err not impl")
 func NewTempKVStore(watchEnabled bool) *TempKVStore {
 	tks := &TempKVStore{
 		dataStore: proto.TempKVStore{Data: make(map[string]*proto.KVEntry)},
-		ack:       proto.AckMap{Ack: make(map[int64]int64)},
 		logger:    logging.GetLogger("kvs", logrus.InfoLevel),
 	}
 	if watchEnabled {
 		tks.dataChangeHandlers = cdc.NewDCC()
 	}
 	return tks
-}
-
-func (kvs *TempKVStore) EvalCMDUnlinearizable(args *proto.ServiceArgs) intf.IEvalResult {
-	reply := &EvalResult{
-		data: make(map[string]string),
-	}
-	kvs.mu.RLock()
-	for _, cmd := range args.Cmds {
-		if cmd.OpType != proto.CmdArgs_GET {
-			reply.err = ErrGetOnly
-			break
-		}
-		reply.data[cmd.OpKey] = kvs.dataStore.Data[cmd.OpKey].Data
-	}
-	defer kvs.mu.RUnlock()
-	return reply
-}
-
-func (kvs *TempKVStore) isDuplicate(req *proto.RequestInfo) bool {
-	kvs.mu.Lock()
-	defer kvs.mu.Unlock()
-	latestID, ok := kvs.ack.Ack[req.ClientID]
-	var ans = false
-	if ok {
-		ans = latestID >= req.RequestID
-	}
-	if !ans {
-		kvs.ack.Ack[req.ClientID] = req.RequestID
-	}
-	return ans
 }
 
 func dataExpired(ttl int64) bool {
@@ -130,15 +98,11 @@ func dataExpired(ttl int64) bool {
 	return ttl < now
 }
 
-func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (intf.IEvalResult, []byte) {
+func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool, getOnly bool) (intf.IEvalResult, []byte) {
 	reply := &EvalResult{
 		data:    make(map[string]string),
 		info:    args.Info,
 		watches: make([]*cdc.WatchResult, 0),
-	}
-	if kvs.isDuplicate(args.Info) {
-		kvs.logger.WithField("Args", fmt.Sprintf("%+v", args)).Warn("duplicate request")
-		return reply, nil
 	}
 	var lockWrite = shouldSnapshot
 	if !shouldSnapshot {
@@ -155,6 +119,12 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool) (i
 	} else {
 		kvs.mu.RLock()
 		defer kvs.mu.RUnlock()
+	}
+	for _, cmd := range args.Cmds {
+		if cmd.OpType != proto.CmdArgs_GET {
+			reply.err = ErrGetOnly
+			return reply, nil
+		}
 	}
 	for _, cmd := range args.Cmds {
 		switch cmd.OpType {

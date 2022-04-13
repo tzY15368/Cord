@@ -14,13 +14,20 @@ var ErrNotLeader = errors.New("err no leader")
 var ErrApplyTimeout = errors.New("err apply timeout")
 
 type ProposeResult struct {
-	err error
+	err  error
+	info *proto.RequestInfo
 }
 
 func (p *ProposeResult) GetClientID() int64 {
+	if p.info != nil {
+		return p.info.ClientID
+	}
 	return -1
 }
 func (p *ProposeResult) GetRequestID() int64 {
+	if p.info != nil {
+		return p.info.RequestID
+	}
 	return -1
 }
 func (p *ProposeResult) GetError() error {
@@ -52,7 +59,8 @@ func (cs *CordServer) waitForApply(index int64) intf.IEvalResult {
 func (cs *CordServer) propose(args proto.ServiceArgs) intf.IEvalResult {
 	if !args.Linearizable {
 		fmt.Println("warning: unlinearizable read")
-		return cs.kvStore.EvalCMDUnlinearizable(&args)
+		res, _ := cs.kvStore.EvalCMD(&args, false, true)
+		return res
 	}
 	index, _, isLeader := cs.rf.Start(args)
 	if !isLeader {

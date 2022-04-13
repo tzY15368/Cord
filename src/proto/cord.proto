@@ -111,3 +111,8 @@ message PersistedState {
     int64 lastIncludedIndex = 4;
     repeated LogEntry log = 5;
 }
+
+message  DBSnapshot {
+    map<int64, int64> ack = 1;
+    bytes content = 2;
+}
