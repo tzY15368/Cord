@@ -25,3 +25,28 @@ total ops: 4992
 7.2432698s
 nclient: 64
 total ops: 4992
+
+========================
+722.1058ms
+nclient: 1
+total ops: 1000
+
+3.4933053s
+nclient: 2
+total ops: 5000
+
+3.6784849s
+nclient: 4
+total ops: 5000
+
+3.5584041s
+nclient: 8
+total ops: 5000
+
+3.4918171s
+nclient: 16
+total ops: 4992
+
+3.3718171s
+nclient: 32
+total ops: 4992
