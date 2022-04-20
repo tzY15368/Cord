@@ -7,6 +7,7 @@ import (
 
 	"6.824/cord/intf"
 	"6.824/proto"
+	"github.com/sirupsen/logrus"
 )
 
 var ErrRetry = errors.New("err retry request")
@@ -71,8 +72,10 @@ func (cs *CordServer) propose(args proto.ServiceArgs) intf.IEvalResult {
 	lostLeaderChan := make(chan struct{}, 1)
 	go func() {
 		res := cs.waitForApply(int64(index))
-		if res.GetClientID() != args.Info.RequestID || res.GetRequestID() != args.Info.RequestID {
-			cs.logger.WithField("index", index).Warn("server: propose: different info on index")
+		if res.GetClientID() != args.Info.ClientID || res.GetRequestID() != args.Info.RequestID {
+			cs.logger.WithFields(logrus.Fields{
+				"index": index,
+			}).Warn("server: propose: different info on index")
 			lostLeaderChan <- struct{}{}
 		} else {
 			doneChan <- res

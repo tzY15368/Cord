@@ -121,7 +121,7 @@ func (kvs *TempKVStore) EvalCMD(args *proto.ServiceArgs, shouldSnapshot bool, ge
 		defer kvs.mu.RUnlock()
 	}
 	for _, cmd := range args.Cmds {
-		if cmd.OpType != proto.CmdArgs_GET {
+		if !args.Linearizable && cmd.OpType != proto.CmdArgs_GET {
 			reply.err = ErrGetOnly
 			return reply, nil
 		}

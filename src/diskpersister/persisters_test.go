@@ -5,6 +5,8 @@ import (
 	"encoding/gob"
 	"fmt"
 	"testing"
+
+	"6.824/common"
 )
 
 func TestPersister(t *testing.T) {
@@ -31,7 +33,7 @@ func TestPersister(t *testing.T) {
 }
 
 func TestRand(t *testing.T) {
-	fmt.Println(genRandomBytes(550, 660))
+	fmt.Println(common.GenRandomBytes(550, 660))
 	buf := new(bytes.Buffer)
 	var en uint64 = 999999999999999
 	encoder := gob.NewEncoder(buf)
@@ -45,7 +47,7 @@ func BenchmarkPNaive(b *testing.B) {
 	persister := NewPersister("bench-out", false)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := persister.writeNaive(genRandomBytes(2500, 4500))
+		err := persister.writeNaive(common.GenRandomBytes(2500, 4500))
 		if err != nil {
 			panic(err)
 		}
@@ -56,7 +58,7 @@ func BenchmarkPMMAP(b *testing.B) {
 	persister := NewPersister("bench-out-mmap", true)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := persister.writeMMap(genRandomBytes(2500, 4500))
+		err := persister.writeMMap(common.GenRandomBytes(2500, 4500))
 		if err != nil {
 			panic(err)
 		}

@@ -13,7 +13,7 @@ import (
 
 const (
 	RaftLogLevel     = logrus.InfoLevel
-	KVServerLogLevel = logrus.DebugLevel
+	KVServerLogLevel = logrus.WarnLevel
 	KVStoreLogLevel  = logrus.InfoLevel
 	ShardCtlLogLevel = logrus.InfoLevel
 	ShardKVLogLevel  = logrus.DebugLevel

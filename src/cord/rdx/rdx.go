@@ -1,8 +1,6 @@
 package rdx
 
 import (
-	"6.824/cord/intf"
-	"6.824/proto"
 	"github.com/hashicorp/go-memdb"
 )
 
@@ -43,10 +41,10 @@ func NewRadixKV(watchEnabled bool) *RadixKV {
 	return &rkv
 }
 
-func (r *RadixKV) EvalCMD(*proto.ServiceArgs, bool, bool) (intf.IEvalResult, []byte) {
+// func (r *RadixKV) EvalCMD(*proto.ServiceArgs, bool, bool) (intf.IEvalResult, []byte) {
 
-	txn := r.db.Txn()
-}
+// 	txn := r.db.Txn()
+// }
 func (r *RadixKV) LoadSnapshot([]byte) {
 
 }

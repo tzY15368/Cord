@@ -1,0 +1,15 @@
+1m48.8775749s
+nclient: 1
+total ops: 1000
+
+54.4470937s
+nclient: 2
+total ops: 1000
+
+43.5887674s
+nclient: 4
+total ops: 5000
+
+7.4595564s
+nclient: 8
+total ops: 5000

@@ -3,6 +3,8 @@ package diskpersister
 import (
 	"fmt"
 	"testing"
+
+	"6.824/common"
 )
 
 func BenchmarkMMAPP(b *testing.B) {
@@ -10,8 +12,8 @@ func BenchmarkMMAPP(b *testing.B) {
 	defer mp.Close()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		state := genRandomBytes(2500, 4500)
-		snapshot := genRandomBytes(500, 5000)
+		state := common.GenRandomBytes(2500, 4500)
+		snapshot := common.GenRandomBytes(500, 5000)
 		_ = state
 		_ = snapshot
 		mp.SaveStateAndSnapshot(*state, *snapshot)

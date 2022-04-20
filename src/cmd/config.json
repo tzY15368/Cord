@@ -5,11 +5,11 @@
         "127.0.0.1:7003"
     ],
     "logLevel": {
-        "raft": "info",
-        "server": "debug",
-        "dataStore": "info"
+        "raft": "warn",
+        "server": "warn",
+        "dataStore": "warn"
     },
-    "snapshotThres": 5000,
+    "snapshotThres": 9000000,
     "me": -1,
     "applyTimeoutMil": 800
 }

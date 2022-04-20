@@ -47,7 +47,7 @@ func NewCordServer(cfg *config.CordConfig) *CordServer {
 	persister := diskpersister.NewMMapPersister(
 		fmt.Sprintf("raft-state-out-%d", cfg.Me),
 		fmt.Sprintf("snapshot-out-%d", cfg.Me),
-		5000,
+		int64(cfg.SnapshotThres),
 	)
 	cs := &CordServer{
 		ack:        proto.AckMap{Ack: make(map[int64]int64)},

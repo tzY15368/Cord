@@ -29,7 +29,7 @@ func BenchmarkStoHT(b *testing.B) {
 		// 	defer mu.Unlock()
 		// 	for j := 0; j < 2; j++ {
 		// 		key := fmt.Sprintf(key_template[j], j)
-		// 		v := common.GenRandomBytes(20, 50)
+		// 		v := common.common.GenRandomBytes(20, 50)
 		// 		data[key] = string(*v)
 		// 	}
 		// 	wg.Done()
@@ -39,7 +39,7 @@ func BenchmarkStoHT(b *testing.B) {
 		// 	defer mu.Unlock()
 		// 	for j := 2; j < 4; j++ {
 		// 		key := fmt.Sprintf(key_template[j], j)
-		// 		v := common.GenRandomBytes(20, 50)
+		// 		v := common.common.GenRandomBytes(20, 50)
 		// 		data[key] = string(*v)
 		// 	}
 		// 	wg.Done()
@@ -73,7 +73,7 @@ func BenchmarkStoImmRdx(b *testing.B) {
 	// 		defer mu.Unlock()
 	// 		for j := 0; j < 2; j++ {
 	// 			key := fmt.Sprintf(key_template[j], j)
-	// 			v := common.GenRandomBytes(20, 50)
+	// 			v := common.common.GenRandomBytes(20, 50)
 	// 			data[key] = string(*v)
 	// 		}
 	// 		wg.Done()
@@ -83,7 +83,7 @@ func BenchmarkStoImmRdx(b *testing.B) {
 	// 		defer mu.Unlock()
 	// 		for j := 2; j < 4; j++ {
 	// 			key := fmt.Sprintf(key_template[j], j)
-	// 			v := common.GenRandomBytes(20, 50)
+	// 			v := common.common.GenRandomBytes(20, 50)
 	// 			data[key] = string(*v)
 	// 		}
 	// 		wg.Done()
@@ -107,7 +107,7 @@ func BenchmarkStoImmRdx(b *testing.B) {
 
 	// 	for j := 0; j < 4; j++ {
 	// 		key := fmt.Sprintf(key_template[j], j)
-	// 		v := common.GenRandomBytes(20, 50)
+	// 		v := common.common.GenRandomBytes(20, 50)
 	// 		tx.Insert([]byte(key), string(*v))
 	// 	}
 	// 	o := rand.Intn(4)
@@ -134,7 +134,7 @@ func TestHT(t *testing.T) {
 		// 	defer mu.Unlock()
 		// 	for j := 0; j < 2; j++ {
 		// 		key := fmt.Sprintf(key_template[j], j)
-		// 		v := common.GenRandomBytes(20, 50)
+		// 		v := common.common.GenRandomBytes(20, 50)
 		// 		data[key] = string(*v)
 		// 	}
 		// 	wg.Done()
@@ -144,7 +144,7 @@ func TestHT(t *testing.T) {
 		// 	defer mu.Unlock()
 		// 	for j := 2; j < 4; j++ {
 		// 		key := fmt.Sprintf(key_template[j], j)
-		// 		v := common.GenRandomBytes(20, 50)
+		// 		v := common.common.GenRandomBytes(20, 50)
 		// 		data[key] = string(*v)
 		// 	}
 		// 	wg.Done()
@@ -207,7 +207,7 @@ func TestMemDB(t *testing.T) {
 		// 	tx := db.Txn(true)
 		// 	for j := 0; j < 2; j++ {
 		// 		key := fmt.Sprintf(key_template[j], j)
-		// 		v := common.GenRandomBytes(20, 50)
+		// 		v := common.common.GenRandomBytes(20, 50)
 		// 		err := tx.Insert("kv", KV{Key: key, Value: string(*v)})
 		// 		if err != nil {
 		// 			panic(err)
@@ -220,7 +220,7 @@ func TestMemDB(t *testing.T) {
 		// 	tx := db.Txn(true)
 		// 	for j := 2; j < 4; j++ {
 		// 		key := fmt.Sprintf(key_template[j], j)
-		// 		v := common.GenRandomBytes(20, 50)
+		// 		v := common.common.GenRandomBytes(20, 50)
 		// 		err := tx.Insert("kv", KV{Key: key, Value: string(*v)})
 		// 		if err != nil {
 		// 			panic(err)
@@ -285,7 +285,7 @@ func BenchmarkStoMemDB(b *testing.B) {
 		// 	tx := db.Txn(true)
 		// 	for j := 0; j < 2; j++ {
 		// 		key := fmt.Sprintf(key_template[j], j)
-		// 		v := common.GenRandomBytes(20, 50)
+		// 		v := common.common.GenRandomBytes(20, 50)
 		// 		err := tx.Insert("kv", KV{Key: key, Value: string(*v)})
 		// 		if err != nil {
 		// 			panic(err)
@@ -298,7 +298,7 @@ func BenchmarkStoMemDB(b *testing.B) {
 		// 	tx := db.Txn(true)
 		// 	for j := 2; j < 4; j++ {
 		// 		key := fmt.Sprintf(key_template[j], j)
-		// 		v := common.GenRandomBytes(20, 50)
+		// 		v := common.common.GenRandomBytes(20, 50)
 		// 		err := tx.Insert("kv", KV{Key: key, Value: string(*v)})
 		// 		if err != nil {
 		// 			panic(err)
