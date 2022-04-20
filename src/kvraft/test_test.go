@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"6.824/common"
 	"6.824/logging"
 	"6.824/models"
 	"6.824/porcupine"
@@ -389,13 +391,46 @@ func GenericTest(t *testing.T, part string, nclients int, nservers int, unreliab
 	cfg.end()
 }
 
+func TestSpeedMulti(t *testing.T) {
+	runtime.GOMAXPROCS(16)
+	total := 5000
+	nck := 32
+	nops := total / nck
+	cfg := make_config(t, 3, false, -1)
+	var wg sync.WaitGroup
+	defer cfg.cleanup()
+	start := time.Now()
+	for i := 0; i < nck; i++ {
+		wg.Add(1)
+		go func(ii int) {
+			defer wg.Done()
+			ck := cfg.makeClient(cfg.All())
+			for j := 0; j < nops; j++ {
+				baseKey := fmt.Sprintf("x-test-%d-%d", ii, j)
+				switch j % 10 {
+				case 0:
+					ck.Put(baseKey, string(*common.GenRandomBytes(9, 10)))
+				case 9:
+					ck.Get(baseKey)
+				default:
+					ck.Append(baseKey, string(*common.GenRandomBytes(9, 10)))
+				}
+
+			}
+		}(i)
+	}
+	wg.Wait()
+	fmt.Println(time.Since(start))
+	fmt.Println("nclient:", nck)
+	fmt.Println("total ops:", nops*nck)
+}
+
 // Check that ops are committed fast enough, better than 1 per heartbeat interval
 func GenericTestSpeed(t *testing.T, part string, maxraftstate int) {
 	const nservers = 3
 	const numOps = 1000
 	cfg := make_config(t, nservers, false, maxraftstate)
 	defer cfg.cleanup()
-
 	ck := cfg.makeClient(cfg.All())
 
 	cfg.begin(fmt.Sprintf("Test: ops complete fast enough (%s)", part))
