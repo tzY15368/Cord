@@ -14,12 +14,12 @@ import (
 
 func TestSpeed(t *testing.T) {
 	total := 5000
-	NClerks := 12
+	NClerks := 32
 	Nops := total / NClerks
 	servers := []string{
-		"127.0.0.1:7500",
-		"127.0.0.1:7501",
-		"127.0.0.1:7502",
+		"10.9.116.177:7500",
+		"10.9.116.177:7501",
+		"10.9.116.177:7502",
 	}
 	var wg sync.WaitGroup
 	start := time.Now()

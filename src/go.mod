@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	github.com/aquasecurity/libbpfgo v0.2.1-libbpf-0.4.0 // indirect
-	github.com/armon/go-radix v1.0.0 // indirect
+	github.com/armon/go-radix v1.0.0
 	github.com/cpuguy83/go-md2man/v2 v2.0.1 // indirect
 	github.com/cweill/gotests v1.6.0 // indirect
 	github.com/edsrzf/mmap-go v1.1.0
@@ -13,7 +13,7 @@ require (
 	github.com/google/pprof v0.0.0-20220314021825-5bba342933ea // indirect
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
-	github.com/hashicorp/go-memdb v1.3.2 // indirect
+	github.com/hashicorp/go-memdb v1.3.2
 	github.com/ianlancetaylor/demangle v0.0.0-20220203202831-b7f99f1dbc96 // indirect
 	github.com/lni/dragonboat/v3 v3.3.5
 	github.com/lni/goutils v1.3.0

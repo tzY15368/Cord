@@ -6,10 +6,22 @@ total ops: 1000
 nclient: 2
 total ops: 1000
 
-43.5887674s
+12.530658s
 nclient: 4
 total ops: 5000
 
-7.4595564s
+8.8727148s
 nclient: 8
 total ops: 5000
+
+7.2725363s
+nclient: 16
+total ops: 4992
+
+7.2144984s
+nclient: 32
+total ops: 4992
+
+7.2432698s
+nclient: 64
+total ops: 4992
