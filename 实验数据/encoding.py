@@ -41,13 +41,15 @@ plt.xticks([i + 0.2 for i in x1],_names)
 
 plt.legend(handles=[b1,b2])
 plt.savefig('./mmap.jpg',dpi=500)
+def merge_image(i1:str,i2:str,outp:str):
+    from PIL import Image
+    img1 = Image.open(i1)
 
-from PIL import Image
-img1 = Image.open('gob.jpg')
+    img2 = Image.open(i2)
 
-img2 = Image.open('mmap.jpg')
+    out = Image.new('RGB',(img2.size[0]+img1.size[0],img1.size[1])) 
+    out.paste(img1) 
+    out.paste(img2,(img1.size[0],0))
+    out.save(outp,quality=100)
 
-out = Image.new('RGB',(img2.size[0]+img1.size[0],img1.size[1]))
-out.paste(img1)
-out.paste(img2,(img1.size[0],0))
-out.save('out.jpg',quality=100)
+merge_image('gob.jpg','mmap.jpg','encoding-out.jpg')
