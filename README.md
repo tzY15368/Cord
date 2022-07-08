@@ -1,5 +1,7 @@
 # Cord
-A homebaked etcd as a graduation project
+A homebaked etcd as a graduation project.
+
+The Original codebase was from mit/6.824, but RPCs and persisters are replaced with custom ones (gRPC + mmap) to enable actual deployements and reliably persistent logs
 
 ## Features
 - High throughput Key-Value Store with go-memdb
