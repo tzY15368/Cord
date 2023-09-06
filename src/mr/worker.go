@@ -16,9 +16,7 @@ import (
 	"github.com/google/uuid"
 )
 
-//
 // Map functions return a slice of KeyValue.
-//
 type KeyValue struct {
 	Key   string
 	Value string
@@ -34,10 +32,8 @@ func (a ByKey) Len() int           { return len(a) }
 func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
-//
 // use ihash(key) % NReduce to choose the reduce
 // task number for each KeyValue emitted by Map.
-//
 func ihash(key string) int {
 	h := fnv.New32a()
 	h.Write([]byte(key))
@@ -49,9 +45,7 @@ func handleErr(e error) {
 	}
 }
 
-//
 // main/mrworker.go calls this function.
-//
 func doReduce(reducef func(string, []string) string, taskPtr *WorkerTask) error {
 	fname := taskPtr.Filename
 	intFile, err := os.Open(fname)
@@ -197,11 +191,9 @@ func TaskComplete(argsPtr *WorkerTask) error {
 	return nil
 }
 
-//
 // send an RPC request to the coordinator, wait for the response.
 // usually returns true.
 // returns false if something goes wrong.
-//
 func call(rpcname string, args interface{}, reply interface{}) error {
 	// c, err := rpc.DialHTTP("tcp", "127.0.0.1"+":1234")
 	sockname := coordinatorSock()

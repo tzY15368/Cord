@@ -10,27 +10,34 @@ x_ticks = [1, 2, 4, 8, 16, 32]
 y_ticks_new = [544, 272.2, 12.53, 8.87, 5.27, 5.21]
 y_real_new = [83.51, 37.79, 12.53, 8.87, 5.27, 5.21]
 y_ticks_old = [3.61, 3.49, 3.67, 3.55, 3.49, 3.37]
+
 y_real_old = [280.38, 282.59, 274.87, 275.99, 279.64, 278.22]
+y_real_new_2 = [106.78, 55.34, 32.17, 18.39, 11.77, 10.26]
+
 y_fake_write = [17.92, 9.43, 3.77, 2.02, 1.30, 1.24]
+y_fake_write_2 = [1.24, 2.42, 3.92, 7.82, 12.68,13.52]
+#每秒读写数（千次）
 # y_real_old = [i * 18.59+ 67 * (_i+1 ) \
 #     if _i <3 else 0 for _i,i in enumerate(y_ticks_old)]
 plt.figure(figsize=(6,4))
-plt.plot(x_ticks, y_real_new, color='blue', label='优化后', marker='o')
-plt.plot(x_ticks, y_real_old, color='orange', label='优化前', marker='o')
+plt.plot(x_ticks, y_real_new, color='blue', label='优化后（哈希表）', marker='o')
+plt.plot(x_ticks, y_real_old, color='orange', label='优化前（哈希表）', marker='o')
+plt.plot(x_ticks,y_real_new_2,color='green', label='优化后（基数树）', marker='o')
 plt.legend(loc='upper right')
 plt.xlabel("线程数")
-plt.ylabel("5000次提交耗时")
+plt.ylabel("5000次提交耗时（秒）")
 plt.title("（1）可线性化读写比1：9")
 plt.savefig('speed-write.jpg', dpi=500)
 
 plt.figure(figsize=(6,4))
-plt.plot(x_ticks,y_fake_write, color='green', marker='o')
+plt.plot(x_ticks,y_fake_write_2, color='green', marker='o')
 plt.legend(loc='upper right')
 plt.xlabel('线程数')
-plt.ylabel('5000次提交耗时')
+plt.ylabel('每秒QPS（千次）')
 plt.title('（2）非可线性化读写比 9：1')
 plt.savefig('speed-nolinear.jpg',dpi=500)
 
+print('out')
 
 from encoding import merge_image
 merge_image('speed-write.jpg','speed-nolinear.jpg','speed-out.jpg')
